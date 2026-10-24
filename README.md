@@ -9,7 +9,7 @@
 ```bash
 git clone <repo> && cd claude-for-everyone-vi
 uv sync
-CLAUDE_MOCK=1 uv run python modules/01-messages-api/python/hello.py
+CLAUDE_MOCK=1 uv run python modules/01-messages-api/python/01_hello.py
 ```
 
 Có key rồi? Sao chép `.env.example` thành `.env`, điền `ANTHROPIC_API_KEY`, bỏ `CLAUDE_MOCK=1`.
