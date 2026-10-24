@@ -1,5 +1,6 @@
 import json
 
+import anthropic
 import pytest
 
 from claude_vi import ClaudeVi, ModelRuleError, Settings, check_request, estimate_cost_usd, text_of
@@ -75,3 +76,61 @@ def test_cost_estimate(mock_client):
     c, _ = mock_client
     cost = estimate_cost_usd(c.ask("x"))
     assert cost == pytest.approx((12 * 0.10 + 18 * 0.50) / 1e6)
+
+
+def test_stream_text_matches_final_message(mock_client):
+    c, _ = mock_client
+    with c.stream(messages=[{"role": "user", "content": "Xin chào"}]) as s:
+        chunks = list(s.text_stream)
+        msg = s.get_final_message()
+    assert len(chunks) > 1                              # thật sự chia nhỏ, không trả một cục
+    assert "".join(chunks) == text_of(msg)
+    assert msg.content[0].type == "thinking"
+
+
+def test_stream_events_follow_api_order(mock_client):
+    c, _ = mock_client
+    with c.stream(messages=[{"role": "user", "content": "x"}]) as s:
+        types = [e.type for e in s]
+    assert types[0] == "message_start" and types[-1] == "message_stop"
+    assert types[-2] == "message_delta"
+    assert types.count("content_block_start") == types.count("content_block_stop") == 2
+
+
+def test_stream_uses_fixture_and_rules(mock_client):
+    c, d = mock_client
+    params = {"model": "claude-haiku-5-5", "messages": [{"role": "user", "content": "1+1?"}]}
+    (d / f"{request_key(params)}.json").write_text(json.dumps({
+        "id": "msg_x", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
+        "content": [{"type": "text", "text": "Bằng 2, chắc chắn luôn."}], "stop_reason": "end_turn",
+        "stop_sequence": None, "usage": {"input_tokens": 5, "output_tokens": 9},
+    }))
+    with c.stream(**params) as s:
+        assert "".join(s.text_stream) == "Bằng 2, chắc chắn luôn."
+    with pytest.raises(ModelRuleError, match="temperature"):
+        c.stream(messages=[{"role": "user", "content": "x"}], temperature=0)
+
+
+def test_small_max_tokens_truncates_like_api(mock_client):
+    c, _ = mock_client
+    full = c.ask("x")
+    cut = c.ask("x", max_tokens=10)
+    assert full.stop_reason == "end_turn" and cut.stop_reason == "max_tokens"
+    assert cut.usage.output_tokens == 10
+    assert text_of(full).startswith(text_of(cut)) and len(text_of(cut)) < len(text_of(full))
+    assert full.usage.output_tokens_details.thinking_tokens <= full.usage.output_tokens
+
+
+@pytest.mark.parametrize("status,exc", [
+    (429, anthropic.RateLimitError),
+    (529, anthropic.OverloadedError),
+    (500, anthropic.InternalServerError),
+    (400, anthropic.BadRequestError),
+])
+def test_mock_raises_sdk_errors(status, exc):
+    s = Settings(model="claude-haiku-5-5", max_tokens=512, mock=True, record=False)
+    c = ClaudeVi(settings=s, client=MockAnthropic(errors=[status]))
+    with pytest.raises(exc) as info:
+        c.ask("x")
+    assert info.value.status_code == status and info.value.request_id == "req_mock"
+    assert text_of(c.ask("x")).startswith("[MOCK]")    # lỗi chỉ xảy ra một lần

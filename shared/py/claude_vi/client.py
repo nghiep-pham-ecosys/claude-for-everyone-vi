@@ -34,7 +34,7 @@ class ClaudeVi:
             load_dotenv()
             self._client = Anthropic()
 
-    def create(self, **params: Any) -> Message:
+    def _prepare(self, params: dict[str, Any]) -> dict[str, Any]:
         params.setdefault("model", self.settings.model)
         params.setdefault("max_tokens", self.settings.max_tokens)
         if params["max_tokens"] > self.settings.max_tokens * 8:
@@ -43,11 +43,28 @@ class ClaudeVi:
                 f"({self.settings.max_tokens * 8}). Đặt MAX_TOKENS nếu thật sự cần."
             )
         check_request(params)  # chặn lỗi 400 trước khi tốn tiền
+        return params
+
+    def create(self, **params: Any) -> Message:
+        params = self._prepare(params)
         msg = self._client.messages.create(**params)
         if self.settings.record and not self.settings.mock:
             path = FIXTURE_DIR / f"{request_key(params)}.json"
             path.write_text(json.dumps(msg.model_dump(mode="json"), ensure_ascii=False, indent=2), "utf-8")
         return msg
+
+    def stream(self, **params: Any) -> Any:
+        """Như create() nhưng trả stream; dùng giống SDK:
+
+        >>> with c.stream(messages=[...]) as s:
+        ...     for chunk in s.text_stream:
+        ...         print(chunk, end="", flush=True)
+        ...     msg = s.get_final_message()
+
+        Mock trả MockMessageStream (event đã validate bằng type SDK); thật trả
+        MessageStreamManager của SDK. CLAUDE_RECORD chưa hỗ trợ stream.
+        """
+        return self._client.messages.stream(**self._prepare(params))
 
     def ask(self, prompt: str, system: str | None = None, **params: Any) -> Message:
         if system:
