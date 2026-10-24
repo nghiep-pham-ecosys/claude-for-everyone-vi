@@ -27,7 +27,7 @@ Capstone đầu tiên: **trích xuất dữ liệu thí nghiệm từ PDF ra JSO
 
 ## Ba nguyên tắc của repo
 
-1. **Mọi model ID nằm trong [`config/models.yaml`](config/models.yaml).** CI chặn model lạ hoặc đã retired.
+1. **Mọi model ID nằm trong [`config/models.yaml`](config/models.yaml).** CI chặn model lạ hoặc đã retired. Bảng luật trong file này được [`scripts/model_sync.py`](scripts/model_sync.py) đối chiếu với Models API (`GET /v1/models`): báo model mới, model biến mất, `thinking_disabled_allowed` lệch API; `--write` sửa YAML, `--issue` mở issue.
 2. **Mọi lời gọi đi qua [`claude_vi`](shared/py/claude_vi).** Wrapper chặn trước các request sẽ lỗi 400 trên model 5.x (sampling params, `budget_tokens`, prefill, `tool_choice` ép buộc) và có mock mode để CI không tốn tiền.
 3. **Không sao chép nội dung có giấy phép hạn chế.** Xem [NOTICE.md](NOTICE.md) và [docs/kiem-chung-2026-10-21.md](docs/kiem-chung-2026-10-21.md).
 

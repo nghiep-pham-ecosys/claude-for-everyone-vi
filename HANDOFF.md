@@ -4,6 +4,9 @@ Khung repo đã dựng và đã chạy thử: 12 test xanh, 2 checker sạch, `h
 
 ## Bước 0 — Tạo repo và push (làm đầu tiên)
 
+> ✅ **Xong 24/10/2026.** Repo Private `pqnghiep1354/claude-for-everyone-vi`, `ci` xanh trên `main` (job `test`; `live-smoke` skipped; không có Environment).
+> ⚠️ Secret scanning + push protection **chưa bật được**: API trả 422 "Secret scanning is not available for this repository" — repo private trên tài khoản cá nhân cần GitHub Secret Protection (trả phí). Thay thế miễn phí: bật *Push protection for yourself* ở github.com/settings/security_analysis (theo tài khoản, áp cho mọi repo bạn push). Nghiệp tự bật.
+
 ```bash
 cd claude-for-everyone-vi
 git init -b main
@@ -22,6 +25,8 @@ Sau đó:
 Xong khi: repo Private tồn tại, `ci` xanh trên `main`.
 
 ## Bước 1 — `scripts/model_sync.py` (không cần key khi chạy test)
+
+> ✅ **Xong 24/10/2026** (PR `feat/model-sync`). `tests/test_model_sync.py` chạy bằng fixture bịa 2 trang; job `model-sync` trong `ci.yml` để `if: false`. `--write` chỉ sửa model đã có (thinking_disabled_allowed, status, max_tokens, server_tools) — không tự thêm/xoá model vì luật 2. Chưa chạy với API thật.
 
 Mục tiêu: bảng luật trong `config/models.yaml` tự đối chiếu với Models API thay vì sửa tay.
 

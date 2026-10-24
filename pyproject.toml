@@ -11,10 +11,16 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6", "nbstripout>=0.7", "papermill>=2.6"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "nbstripout>=0.7",
+    "papermill>=2.6",
+    "ruamel-yaml>=0.18",
+]
 
 [tool.pytest.ini_options]
-pythonpath = ["shared/py"]
+pythonpath = ["shared/py", "scripts"]
 testpaths = ["tests"]
 
 [tool.ruff]
