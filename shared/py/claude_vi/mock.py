@@ -23,8 +23,9 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 _EVENT = TypeAdapter(RawMessageStreamEvent)
 
 _DEFAULT_TEXT = "[MOCK] Xin chào! Đây là phản hồi giả lập."
-_DEFAULT_OUTPUT_TOKENS = 18
-_DEFAULT_THINKING_TOKENS = 6
+_TEXT_TOKENS = 12
+# Token thinking giả lập theo effort: đủ để thấy effort là "núm vặn" chi phí, không phải số thật
+_THINKING_BY_EFFORT = {"low": 2, "medium": 6, "high": 12, "xhigh": 20, "max": 30}
 
 
 def request_key(params: dict[str, Any]) -> str:
@@ -34,32 +35,69 @@ def request_key(params: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def schema_instance(schema: Any, root: Any = None) -> Any:
+    """Một giá trị hợp lệ tối thiểu theo JSON schema — mock trả về khi có output_config.format."""
+    root = root if root is not None else schema
+    if "$ref" in schema:
+        name = schema["$ref"].split("/")[-1]
+        defs = root.get("$defs") or root.get("definitions") or {}
+        return schema_instance(defs[name], root)
+    if "const" in schema:
+        return schema["const"]
+    if "enum" in schema:
+        return schema["enum"][0]
+    for key in ("anyOf", "allOf"):
+        if key in schema:
+            return schema_instance(schema[key][0], root)
+    kind = schema.get("type")
+    if isinstance(kind, list):
+        kind = kind[0]
+    if kind == "object" or "properties" in schema:
+        props = schema.get("properties") or {}
+        required = list(schema.get("required") or [])
+        order = required + [k for k in props if k not in required]  # API: required trước, optional sau
+        return {k: schema_instance(props[k], root) for k in order}
+    if kind == "array":
+        return [schema_instance(schema.get("items") or {}, root)]
+    formats = {"date": "2026-01-01", "date-time": "2026-01-01T00:00:00Z", "email": "mock@example.com",
+               "uri": "https://example.com", "uuid": "00000000-0000-0000-0000-000000000000"}
+    return {"string": formats.get(schema.get("format"), "[MOCK]"), "integer": 0, "number": 0.0,
+            "boolean": False, "null": None}.get(kind, "[MOCK]")
+
+
 def _default_payload(params: dict[str, Any]) -> dict[str, Any]:
     # Model 5.x có adaptive thinking bật mặc định: response có thể BẮT ĐẦU
     # bằng block thinking (text rỗng khi display="omitted"). Mock mô phỏng
     # đúng điều này để học viên không viết msg.content[0].text.
-    text, out, stop = _DEFAULT_TEXT, _DEFAULT_OUTPUT_TOKENS, "end_turn"
+    from .config import load_models
+
+    output_config = params.get("output_config") or {}
+    effort = output_config.get("effort") or load_models()["models"][params["model"]].get("default_effort", "high")
+    thinking_on = (params.get("thinking") or {}).get("type") not in ("disabled", "between_tools")
+    thinking = _THINKING_BY_EFFORT[effort] if thinking_on else 0
+
+    fmt = output_config.get("format")
+    text = json.dumps(schema_instance(fmt["schema"]), ensure_ascii=False) if fmt else _DEFAULT_TEXT
+    out, stop = thinking + _TEXT_TOKENS, "end_turn"
     max_tokens = params.get("max_tokens", out)
     if max_tokens < out:
         # Giống API thật: thinking + text cùng tính vào max_tokens, hết trần thì cắt ngang
-        keep = max(0, max_tokens - _DEFAULT_THINKING_TOKENS)
-        text = text[: len(text) * keep // (out - _DEFAULT_THINKING_TOKENS)]
+        keep = max(0, max_tokens - thinking)
+        text = text[: len(text) * keep // _TEXT_TOKENS]
         out, stop = max_tokens, "max_tokens"
+    content = [{"type": "thinking", "thinking": "", "signature": "mock-signature"}] if thinking_on else []
     return {
         "id": "msg_mock_default",
         "type": "message",
         "role": "assistant",
         "model": params["model"],
-        "content": [
-            {"type": "thinking", "thinking": "", "signature": "mock-signature"},
-            {"type": "text", "text": text},
-        ],
+        "content": [*content, {"type": "text", "text": text}],
         "stop_reason": stop,
         "stop_sequence": None,
         "usage": {
             "input_tokens": 12,
             "output_tokens": out,
-            "output_tokens_details": {"thinking_tokens": min(out, _DEFAULT_THINKING_TOKENS)},
+            "output_tokens_details": {"thinking_tokens": min(out, thinking)},
         },
     }
 

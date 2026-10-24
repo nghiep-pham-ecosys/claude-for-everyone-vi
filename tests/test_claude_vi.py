@@ -134,3 +134,77 @@ def test_mock_raises_sdk_errors(status, exc):
         c.ask("x")
     assert info.value.status_code == status and info.value.request_id == "req_mock"
     assert text_of(c.ask("x")).startswith("[MOCK]")    # lỗi chỉ xảy ra một lần
+
+
+@pytest.mark.parametrize("model,extra,needle", [
+    ("claude-haiku-5-5", {"thinking": {"type": "enabled"}}, "enabled"),
+    ("claude-opus-5-5", {"thinking": {"type": "between_tools"}}, "chỉ có trên Sonnet"),
+    ("claude-haiku-5-5", {"thinking": {"type": "disabled"}, "output_config": {"effort": "max"}}, "cần thinking"),
+    ("claude-sonnet-5-5", {"thinking": {"type": "between_tools"}, "output_config": {"effort": "xhigh"}},
+     "cần thinking"),
+    ("claude-haiku-5-5", {"output_config": {"effort": "adaptive"}}, "chế độ thinking"),
+    ("claude-haiku-5-5", {"output_config": {"format": {"type": "json"}}}, "json_schema"),
+])
+def test_thinking_effort_format_rules(model, extra, needle):
+    params = {"model": model, "messages": [{"role": "user", "content": "x"}], **extra}
+    with pytest.raises(ModelRuleError, match=needle):
+        check_request(params)
+
+
+def test_allowed_thinking_effort_combinations():
+    for model, extra in [
+        ("claude-haiku-5-5", {"thinking": {"type": "disabled"}, "output_config": {"effort": "high"}}),
+        ("claude-sonnet-5-5", {"thinking": {"type": "between_tools"}}),
+        ("claude-opus-5-5", {"thinking": {"type": "adaptive"}, "output_config": {"effort": "max"}}),
+    ]:
+        check_request({"model": model, "messages": [{"role": "user", "content": "x"}], **extra})
+
+
+def test_schema_errors_like_structured_outputs():
+    from claude_vi.rules import schema_errors
+
+    ok = {"type": "object", "properties": {"n": {"type": "integer"}, "tags": {"type": "array",
+          "items": {"type": "string"}}}, "required": ["n"], "additionalProperties": False}
+    assert schema_errors(ok) == []
+    bad = {"type": "object", "properties": {
+        "n": {"type": "integer", "minimum": 0},
+        "inner": {"type": "object", "properties": {"x": {"type": "string"}}},
+        "tags": {"type": "array", "items": {"type": "string"}, "minItems": 2},
+    }}
+    errs = " | ".join(schema_errors(bad))
+    assert "schema: object phải có additionalProperties" in errs
+    assert "schema.inner: object phải có additionalProperties" in errs
+    assert "'minimum'" in errs and "minItems" in errs
+
+
+def test_mock_effort_changes_thinking_tokens(mock_client):
+    c, _ = mock_client
+    tokens = {e: c.ask("x", output_config={"effort": e}).usage.output_tokens_details.thinking_tokens
+              for e in ("low", "medium", "high", "max")}
+    assert tokens["low"] < tokens["medium"] < tokens["high"] < tokens["max"]
+    assert c.ask("x").usage.output_tokens_details.thinking_tokens == tokens["medium"]   # mặc định Haiku 5.5
+    off = c.ask("x", thinking={"type": "disabled"})
+    assert [b.type for b in off.content] == ["text"]
+
+
+def test_mock_structured_output_matches_schema(mock_client):
+    c, _ = mock_client
+    schema = {
+        "type": "object",
+        "properties": {
+            "ghi_chu": {"type": "string"},
+            "nhan": {"type": "string", "enum": ["tot", "xau"]},
+            "diem": {"type": "integer"},
+            "ngay": {"type": "string", "format": "date"},
+            "the": {"type": "array", "items": {"$ref": "#/$defs/the"}},
+        },
+        "required": ["nhan", "diem", "ngay", "the"],
+        "additionalProperties": False,
+        "$defs": {"the": {"type": "object", "properties": {"ten": {"type": "string"}},
+                          "required": ["ten"], "additionalProperties": False}},
+    }
+    msg = c.ask("x", output_config={"format": {"type": "json_schema", "schema": schema}})
+    data = json.loads(text_of(msg))
+    assert list(data) == ["nhan", "diem", "ngay", "the", "ghi_chu"]      # required trước
+    assert data["nhan"] == "tot" and data["diem"] == 0 and data["ngay"] == "2026-01-01"
+    assert data["the"] == [{"ten": "[MOCK]"}]
