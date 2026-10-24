@@ -5,6 +5,7 @@ temperature trên Haiku 5.5, CI phải đỏ chứ không được xanh giả.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .config import load_models
@@ -12,6 +13,8 @@ from .config import load_models
 SAMPLING_PARAMS = ("temperature", "top_p", "top_k")
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 # Từ khoá JSON Schema mà structured outputs / strict tool use không hỗ trợ (docs Structured outputs, kiểm 2026-10-24)
+TOOL_NAME = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")  # docs Define tools, kiểm 2026-10-24
+MAX_STRICT_TOOLS = 20
 UNSUPPORTED_SCHEMA_KEYS = ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
                            "minLength", "maxLength")
 
@@ -79,6 +82,8 @@ def check_request(params: dict[str, Any]) -> None:
             "Dùng tool_choice auto + strict tool use, hoặc structured outputs."
         )
 
+    errors += tool_errors(params)
+
     messages = params.get("messages") or []
     if messages and messages[-1].get("role") == "assistant" and not rules.get("assistant_prefill_allowed", True):
         errors.append(
@@ -113,5 +118,60 @@ def schema_errors(schema: Any, path: str = "schema") -> list[str]:
     for key in ("$defs", "definitions"):
         for name, sub in (schema.get(key) or {}).items():
             errors += schema_errors(sub, f"{path}.{key}.{name}")
+    return errors
+
+
+def _field(block: Any, name: str) -> Any:
+    """Đọc trường của block dù là dict (tự viết) hay object SDK (msg.content gửi lại)."""
+    return block.get(name) if isinstance(block, dict) else getattr(block, name, None)
+
+
+def _blocks(message: dict[str, Any]) -> list[Any]:
+    content = message.get("content")
+    return content if isinstance(content, list) else []
+
+
+def tool_errors(params: dict[str, Any]) -> list[str]:
+    """Lỗi 400 liên quan tới tool: định nghĩa tool và cặp tool_use / tool_result."""
+    errors = []
+    tools = params.get("tools") or []
+    for tool in tools:
+        if "type" in tool and "input_schema" not in tool:
+            continue  # tool có sẵn của Anthropic (web_search...), không phải tool tự định nghĩa
+        name = tool.get("name", "")
+        if not TOOL_NAME.match(name):
+            errors.append(f"Tên tool '{name}' phải khớp ^[a-zA-Z0-9_-]{{1,128}}$ (không dấu, không khoảng trắng)")
+        if "input_schema" not in tool:
+            errors.append(f"Tool '{name}' thiếu input_schema")
+        elif tool.get("strict"):
+            errors += [f"tool '{name}' (strict): {e}" for e in schema_errors(tool["input_schema"], "input_schema")]
+    if sum(1 for t in tools if t.get("strict")) > MAX_STRICT_TOOLS:
+        errors.append(f"Tối đa {MAX_STRICT_TOOLS} tool strict trong một request")
+
+    messages = params.get("messages") or []
+    for i, msg in enumerate(messages):
+        if msg.get("role") != "assistant":
+            continue
+        ids = [_field(b, "id") for b in _blocks(msg) if _field(b, "type") == "tool_use"]
+        if not ids or i + 1 >= len(messages):
+            continue
+        nxt = messages[i + 1]
+        blocks = _blocks(nxt)
+        types = [_field(b, "type") for b in blocks]
+        n_results = 0
+        while n_results < len(types) and types[n_results] == "tool_result":
+            n_results += 1
+        answered = {_field(b, "tool_use_id") for b in blocks if _field(b, "type") == "tool_result"}
+        if nxt.get("role") != "user" or set(ids) - answered:
+            errors.append(
+                f"messages.{i + 1}: tool_use ids were found without tool_result blocks immediately after: "
+                f"{', '.join(sorted(set(ids) - answered))}. Mỗi tool_use cần một tool_result ngay lượt user kế tiếp."
+            )
+        elif "tool_result" in types[n_results:]:
+            errors.append(f"messages.{i + 1}: các block tool_result phải đứng ĐẦU content, text đặt sau.")
+        extra = answered - set(ids)
+        if extra:
+            errors.append(f"messages.{i + 1}: tool_result trỏ tới tool_use_id không có ở lượt trước: "
+                          f"{', '.join(sorted(extra))}")
     return errors
 

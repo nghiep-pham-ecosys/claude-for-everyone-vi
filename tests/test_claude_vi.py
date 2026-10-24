@@ -208,3 +208,95 @@ def test_mock_structured_output_matches_schema(mock_client):
     assert list(data) == ["nhan", "diem", "ngay", "the", "ghi_chu"]      # required trước
     assert data["nhan"] == "tot" and data["diem"] == 0 and data["ngay"] == "2026-01-01"
     assert data["the"] == [{"ten": "[MOCK]"}]
+
+
+TOOL = {
+    "name": "tra_aqi",
+    "description": "Tra chỉ số AQI hiện tại của một thành phố.",
+    "strict": True,
+    "input_schema": {"type": "object", "properties": {"thanh_pho": {"type": "string", "enum": ["Hà Nội", "Huế"]}},
+                     "required": ["thanh_pho"], "additionalProperties": False},
+}
+TOOL2 = {**TOOL, "name": "tra_gio"}
+
+
+def test_tool_definition_rules():
+    base = {"model": "claude-haiku-5-5", "messages": [{"role": "user", "content": "x"}]}
+    with pytest.raises(ModelRuleError, match="Tên tool"):
+        check_request({**base, "tools": [{**TOOL, "name": "tra cứu"}]})
+    loose = {**TOOL, "input_schema": {"type": "object", "properties": {"q": {"type": "string"}}}}
+    with pytest.raises(ModelRuleError, match="strict.*additionalProperties"):
+        check_request({**base, "tools": [loose]})
+    check_request({**base, "tools": [{**loose, "strict": False}]})          # không strict thì không bắt buộc
+    with pytest.raises(ModelRuleError, match="Tối đa 20"):
+        check_request({**base, "tools": [{**TOOL, "name": f"t{i}"} for i in range(21)]})
+
+
+def test_tool_loop_in_mock(mock_client):
+    c, _ = mock_client
+    msgs = [{"role": "user", "content": "AQI Hà Nội?"}]
+    first = c.create(messages=msgs, tools=[TOOL])
+    assert first.stop_reason == "tool_use"
+    assert [b.type for b in first.content] == ["thinking", "text", "tool_use"]
+    call = first.content[-1]
+    assert call.input == {"thanh_pho": "Hà Nội"}
+
+    msgs += [{"role": "assistant", "content": first.content},
+             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call.id, "content": "AQI 152"}]}]
+    final = c.create(messages=msgs, tools=[TOOL])
+    assert final.stop_reason == "end_turn" and "AQI 152" in text_of(final)
+
+
+def test_parallel_and_tool_choice(mock_client):
+    c, _ = mock_client
+    msgs = [{"role": "user", "content": "x"}]
+    both = c.create(messages=msgs, tools=[TOOL, TOOL2])
+    assert [b.name for b in both.content if b.type == "tool_use"] == ["tra_aqi", "tra_gio"]
+    one = c.create(messages=msgs, tools=[TOOL, TOOL2], tool_choice={"type": "auto", "disable_parallel_tool_use": True})
+    assert [b.type for b in one.content].count("tool_use") == 1
+    none = c.create(messages=msgs, tools=[TOOL], tool_choice={"type": "none"})
+    assert none.stop_reason == "end_turn"
+
+
+def test_tool_result_rules(mock_client):
+    c, _ = mock_client
+    first = c.create(messages=[{"role": "user", "content": "x"}], tools=[TOOL, TOOL2])
+    ids = [b.id for b in first.content if b.type == "tool_use"]
+    head = [{"role": "user", "content": "x"}, {"role": "assistant", "content": first.content}]
+
+    def result(i):
+        return {"type": "tool_result", "tool_use_id": i, "content": "ok"}
+
+    with pytest.raises(ModelRuleError, match="without tool_result"):          # thiếu một kết quả
+        c.create(messages=[*head, {"role": "user", "content": [result(ids[0])]}], tools=[TOOL, TOOL2])
+    with pytest.raises(ModelRuleError, match="ĐẦU content"):                  # text đứng trước tool_result
+        c.create(messages=[*head, {"role": "user", "content": [
+            {"type": "text", "text": "kết quả:"}, result(ids[0]), result(ids[1])]}], tools=[TOOL, TOOL2])
+    ok = c.create(messages=[*head, {"role": "user", "content": [
+        result(ids[0]), result(ids[1]), {"type": "text", "text": "tóm tắt giúp"}]}], tools=[TOOL, TOOL2])
+    assert ok.stop_reason == "end_turn"
+
+
+def test_stripping_thinking_in_tool_loop_is_400(mock_client):
+    c, _ = mock_client
+    first = c.create(messages=[{"role": "user", "content": "x"}], tools=[TOOL])
+    call = first.content[-1]
+    stripped = [b for b in first.content if b.type != "thinking"]
+    with pytest.raises(anthropic.BadRequestError, match="cannot be modified"):
+        c.create(tools=[TOOL], messages=[
+            {"role": "user", "content": "x"}, {"role": "assistant", "content": stripped},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call.id, "content": "ok"}]}])
+
+
+def test_forced_tool_choice_skips_thinking(mock_client):
+    c, _ = mock_client
+    msg = c.create(messages=[{"role": "user", "content": "x"}], tools=[TOOL],
+                   tool_choice={"type": "tool", "name": "tra_aqi"})
+    assert [b.type for b in msg.content] == ["tool_use"]
+
+
+def test_stream_tool_use(mock_client):
+    c, _ = mock_client
+    with c.stream(messages=[{"role": "user", "content": "x"}], tools=[TOOL]) as s:
+        msg = s.get_final_message()
+    assert msg.content[-1].type == "tool_use"

@@ -54,8 +54,8 @@ models:
     status: active
     price_per_mtok: {input: 0.10, output: 0.50}   # "from" – giá thấp nhất, xem trang Pricing
     rules:
-      thinking_disabled_allowed: true     # chưa xác minh qua Models API – chạy model-sync để chắc
-      forced_tool_choice_allowed: true    # release notes 2026-10-07 không nêu – cần live-smoke xác nhận
+      thinking_disabled_allowed: true     # docs Thinking: nhận "disabled" ở effort high trở xuống (kiểm 2026-10-24)
+      forced_tool_choice_allowed: true    # docs Define tools: Haiku 5.5 nhận any/tool, khi đó bỏ thinking (kiểm 2026-10-24)
       sampling_params_allowed: false      # 2026-10-07
       assistant_prefill_allowed: false    # 2026-10-07
       thinking_enabled_allowed: false     # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
