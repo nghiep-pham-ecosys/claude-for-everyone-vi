@@ -40,7 +40,7 @@ Xong khi: test của `model_sync` xanh, README mục "Ba nguyên tắc" nhắc t
 
 ## Bước 2 — Module 01 Messages API hoàn chỉnh (khuôn mẫu cho mọi module)
 
-> 🟡 **Xong phần làm, chờ Nghiệp review** (24/10/2026, PR `feat/module-01`, xếp chồng trên PR Bước 1). 5 script `python/01_…05_`, 3 bài + lời giải + `tests/test_module01.py`, `quiz.md` 10 câu, `references.md` (kiểm 24/10). `claude_vi` có `ClaudeVi.stream()` (mock validate từng event bằng `RawMessageStreamEvent`) và `MockAnthropic(errors=[...])` giả lập 429/529/500/400. `hello.py` đổi tên thành `01_hello.py`; CI chạy mọi `modules/*/python/*.py`. Chưa chạy với API thật.
+> ✅ **Xong 24/10/2026**, Nghiệp duyệt và đã merge (PR #2). 5 script `python/01_…05_`, 3 bài + lời giải + `tests/test_module01.py`, `quiz.md` 10 câu, `references.md` (kiểm 24/10). `claude_vi` có `ClaudeVi.stream()` (mock validate từng event bằng `RawMessageStreamEvent`) và `MockAnthropic(errors=[...])` giả lập 429/529/500/400. `hello.py` đổi tên thành `01_hello.py`; CI chạy mọi `modules/*/python/*.py`. Chưa chạy với API thật.
 
 Nội dung tự viết, tiếng Việt, kiểm từ https://platform.claude.com/docs:
 - `README.md`: mục tiêu, Learn/Build, thời lượng, chi phí ước tính; vì sao → tối thiểu chạy được → bẫy thường gặp → "Điều gì đã thay đổi ở model 5.x".
@@ -52,6 +52,9 @@ Xong khi: mọi script chạy với `CLAUDE_MOCK=1`, 4 lệnh trong CLAUDE.md xa
 
 ## Bước 3 — Module 02 Prompt engineering, Module 03 Tool use
 
+> 🟡 **Xong phần làm, chờ merge** (24/10/2026). Module 02: PR #3 (`feat/module-02`). Module 03: PR `feat/module-03`, xếp chồng trên PR #3.
+> `claude_vi` mô phỏng thêm: effort (token thinking), structured outputs (JSON đúng schema), tool use (gọi song song, `disable_parallel_tool_use`, `none`, forced bỏ thinking), và trả 400 khi block thinking trong vòng lặp tool bị sửa. `rules.py` chặn thêm: thinking `enabled`/`between_tools` sai model, effort lạ, schema strict/structured outputs không hợp lệ, tên tool sai, tool_result thiếu/sai chỗ.
+
 Theo khuôn module 01. Module 03 lưu ý: `tool_choice` chỉ dùng `auto`; dạy strict tool use; thinking block phải gửi lại nguyên vẹn trong tool loop.
 
 ## Bước 4 — Capstone c2: trích xuất dữ liệu thí nghiệm từ PDF
@@ -61,5 +64,5 @@ Cần structured outputs + citations. Dùng PDF mẫu tự tạo hoặc giấy p
 ## Còn treo (cần key thật — chờ Nghiệp quyết)
 
 - Haiku 5.5: `forced_tool_choice_allowed` và `thinking_disabled_allowed` đang là giả định (`true`). Bước 1 trả lời được ý thứ hai qua Models API; ý thứ nhất cần một request thật.
-  - Cập nhật 24/10: trang docs [Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking) ghi rõ Haiku 5.5 nhận `thinking: {"type": "disabled"}` ở effort `high` trở xuống, và trang [Errors](https://platform.claude.com/docs/en/api/errors) chỉ liệt kê Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1 là cấm forced tool use. Hai giả định khớp docs; vẫn nên xác nhận bằng request thật.
+  - Cập nhật 24/10: docs đã trả lời cả hai ý. [Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking): Haiku 5.5 nhận `thinking: {"type": "disabled"}` ở effort `high` trở xuống. [Define tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools): Haiku 5.5 nhận `tool_choice` any/tool (khi đó bỏ thinking). Comment trong `config/models.yaml` đã cập nhật; vẫn nên xác nhận bằng request thật khi có key.
 - Ghi fixture thật bằng `CLAUDE_RECORD=1`.
