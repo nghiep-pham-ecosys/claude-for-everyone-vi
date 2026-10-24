@@ -1,0 +1,21 @@
+[project]
+name = "claude-for-everyone-vi"
+version = "0.1.0"
+description = "Lộ trình học không chính thức về nền tảng Claude, bằng tiếng Việt"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "anthropic>=1.17,<2",   # 1.x đã bỏ temperature/top_p/top_k; đọc MIGRATION.md trước khi nâng major
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "nbstripout>=0.7", "papermill>=2.6"]
+
+[tool.pytest.ini_options]
+pythonpath = ["shared/py"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110

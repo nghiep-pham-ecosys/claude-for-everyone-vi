@@ -1,0 +1,37 @@
+name: ci
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 1 * * 1"   # thứ Hai hằng tuần: bắt model mới bị deprecate
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_MOCK: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run pytest -q
+      - run: uv run python scripts/check_models.py
+      - run: uv run python scripts/check_legacy_params.py
+      - name: Ví dụ module 01 chạy được ở mock mode
+        run: uv run python modules/01-messages-api/python/hello.py
+
+  live-smoke:
+    # Gọi API thật, rất ít token. Cần duyệt thủ công qua GitHub Environment.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: live-api
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MAX_TOKENS: "256"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run python modules/01-messages-api/python/hello.py
