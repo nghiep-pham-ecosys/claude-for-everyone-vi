@@ -17,7 +17,7 @@ import httpx2
 from anthropic.types import Message, RawMessageStreamEvent
 from pydantic import TypeAdapter
 
-from .rules import check_request
+from .rules import _blocks, _field, check_request
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 _EVENT = TypeAdapter(RawMessageStreamEvent)
@@ -102,7 +102,7 @@ def _default_payload(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _api_error(status: int) -> anthropic.APIStatusError:
+def _api_error(status: int, message: str | None = None) -> anthropic.APIStatusError:
     """Dựng đúng exception mà SDK ném khi API trả mã lỗi `status`."""
     kinds = {
         400: (anthropic.BadRequestError, "invalid_request_error"),
@@ -111,7 +111,7 @@ def _api_error(status: int) -> anthropic.APIStatusError:
         529: (anthropic.OverloadedError, "overloaded_error"),
     }
     cls, err_type = kinds[status]
-    body = {"type": "error", "error": {"type": err_type, "message": f"[MOCK] lỗi {status}"},
+    body = {"type": "error", "error": {"type": err_type, "message": message or f"[MOCK] lỗi {status}"},
             "request_id": "req_mock"}
     headers = {"request-id": "req_mock"}
     if status == 429:
@@ -141,6 +141,11 @@ def _events(msg: Message) -> Iterator[dict[str, Any]]:
             for j in range(0, len(block.text), 8):
                 yield {"type": "content_block_delta", "index": i,
                        "delta": {"type": "text_delta", "text": block.text[j : j + 8]}}
+        elif block.type == "tool_use":
+            yield {"type": "content_block_start", "index": i,
+                   "content_block": {"type": "tool_use", "id": block.id, "name": block.name, "input": {}}}
+            yield {"type": "content_block_delta", "index": i,
+                   "delta": {"type": "input_json_delta", "partial_json": json.dumps(block.input, ensure_ascii=False)}}
         else:
             raise NotImplementedError(f"Mock chưa stream được block '{block.type}'")
         yield {"type": "content_block_stop", "index": i}
@@ -186,19 +191,93 @@ class MockMessageStream:
         return self._final
 
 
+_THINKING_MODIFIED = (
+    "messages.{i}.content: `thinking` or `redacted_thinking` blocks in the latest assistant message cannot be "
+    "modified. These blocks must remain as they were in the original response."
+)
+
+
 class _MockMessages:
     def __init__(self, record_dir: Path | None = None, errors: list[int] | None = None) -> None:
         self._dir = record_dir or FIXTURE_DIR
         self._errors = list(errors or [])
+        self._n = 0
+        self._issued: dict[str, str | None] = {}  # tool_use id -> chữ ký block thinking của lượt đó
         self.calls = 0
+
+    def _check_thinking_kept(self, params: dict[str, Any]) -> None:
+        """Như API: lượt assistant cuối có tool_use phải giữ nguyên block thinking của nó."""
+        messages = params.get("messages") or []
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i].get("role") == "assistant":
+                break
+        else:
+            return
+        blocks = _blocks(messages[i])
+        ids = [_field(b, "id") for b in blocks if _field(b, "type") == "tool_use" and _field(b, "id") in self._issued]
+        signature = self._issued[ids[0]] if ids else None
+        if signature is None:
+            return
+        kept = any(_field(b, "type") == "thinking" and _field(b, "signature") == signature
+                   and _field(b, "thinking") == "" for b in blocks)
+        if not kept:
+            raise _api_error(400, _THINKING_MODIFIED.format(i=i))
+
+    def _tool_payload(self, params: dict[str, Any]) -> dict[str, Any] | None:
+        """Có tools: lượt đầu gọi tool, lượt nhận tool_result thì trả lời. None nếu không liên quan tool."""
+        tools = [t for t in params.get("tools") or [] if "input_schema" in t]
+        choice = params.get("tool_choice") or {}
+        if not tools or choice.get("type") == "none":
+            return None
+        payload = _default_payload(params)
+        thinking = [b for b in payload["content"] if b["type"] == "thinking"]
+        results = [b for b in _blocks(params["messages"][-1]) if _field(b, "type") == "tool_result"]
+        if results:
+            parts = []
+            for r in results:
+                c = _field(r, "content")
+                text = c if isinstance(c, str) else " ".join(_field(x, "text") or "" for x in (c or []))
+                parts.append(("LỖI " if _field(r, "is_error") else "") + text[:60])
+            payload["content"] = [*thinking, {"type": "text", "text": "[MOCK] Đã nhận kết quả tool: " + " | ".join(parts)}]
+            return payload
+
+        if choice.get("type") == "tool":
+            tools = [t for t in tools if t["name"] == choice.get("name")]
+        if choice.get("disable_parallel_tool_use") or choice.get("type") == "tool":
+            tools = tools[:1]
+        forced = choice.get("type") in ("any", "tool")
+        self._n += 1
+        signature = None if forced else f"mock-sig-{self._n}"
+        calls = []
+        for t in tools:
+            self._n += 1
+            tool_id = f"toolu_mock_{self._n:03d}"
+            self._issued[tool_id] = signature
+            calls.append({"type": "tool_use", "id": tool_id, "name": t["name"], "input": schema_instance(t["input_schema"])})
+        if forced:
+            # docs: tool_choice any/tool bỏ qua thinking, response bắt đầu bằng tool_use
+            payload["content"] = calls
+            payload["usage"]["output_tokens_details"] = {"thinking_tokens": 0}
+        else:
+            thinking = [{"type": "thinking", "thinking": "", "signature": signature}] if thinking else []
+            if not thinking:
+                for tool_id in (c["id"] for c in calls):
+                    self._issued[tool_id] = None
+            payload["content"] = [*thinking, {"type": "text", "text": "[MOCK] Mình sẽ gọi tool."}, *calls]
+        payload["stop_reason"] = "tool_use"
+        return payload
 
     def _respond(self, params: dict[str, Any]) -> Message:
         self.calls += 1
         if self._errors:
             raise _api_error(self._errors.pop(0))
         check_request(params)
+        self._check_thinking_kept(params)
         path = self._dir / f"{request_key(params)}.json"
-        payload = json.loads(path.read_text("utf-8")) if path.exists() else _default_payload(params)
+        if path.exists():
+            payload = json.loads(path.read_text("utf-8"))
+        else:
+            payload = self._tool_payload(params) or _default_payload(params)
         payload.setdefault("model", params["model"])
         return Message.model_validate(payload)
 
