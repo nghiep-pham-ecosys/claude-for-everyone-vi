@@ -9,6 +9,7 @@
 #   retired     – gọi API sẽ lỗi; CI chặn ở mọi nơi trừ legacy/
 #
 # rules: các ràng buộc mà mock mode của claude_vi kiểm tra giống API thật.
+# default_effort: mức effort khi không truyền output_config.effort (mock dùng để mô phỏng token thinking).
 
 default_model: claude-haiku-5-5
 
@@ -21,6 +22,9 @@ models:
       forced_tool_choice_allowed: false   # tool_choice any/tool -> 400 (release notes 2026-09-01)
       sampling_params_allowed: false
       assistant_prefill_allowed: false
+      thinking_enabled_allowed: false     # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
+      between_tools_allowed: false        # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+    default_effort: high                  # docs Effort, kiểm 2026-10-24
 
   claude-opus-5-5:
     status: active
@@ -30,6 +34,9 @@ models:
       forced_tool_choice_allowed: false   # 2026-09-22
       sampling_params_allowed: false
       assistant_prefill_allowed: false
+      thinking_enabled_allowed: false     # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
+      between_tools_allowed: false        # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+    default_effort: medium                # docs Effort, kiểm 2026-10-24
 
   claude-sonnet-5-5:
     status: active
@@ -39,6 +46,9 @@ models:
       forced_tool_choice_allowed: false   # 2026-09-28
       sampling_params_allowed: false
       assistant_prefill_allowed: false
+      thinking_enabled_allowed: false     # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
+      between_tools_allowed: true         # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+    default_effort: high                  # docs Effort, kiểm 2026-10-24
 
   claude-haiku-5-5:
     status: active
@@ -48,6 +58,9 @@ models:
       forced_tool_choice_allowed: true    # release notes 2026-10-07 không nêu – cần live-smoke xác nhận
       sampling_params_allowed: false      # 2026-10-07
       assistant_prefill_allowed: false    # 2026-10-07
+      thinking_enabled_allowed: false     # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
+      between_tools_allowed: false        # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+    default_effort: medium                # docs Effort, kiểm 2026-10-24
 
   claude-sonnet-4-5-20250929:
     status: deprecated

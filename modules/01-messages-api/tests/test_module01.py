@@ -3,45 +3,25 @@
     uv run pytest modules/01-messages-api -q                     # chấm lời giải (CI)
     CHAM=exercises uv run pytest modules/01-messages-api -q      # chấm bài của bạn
 """
-import copy
-import importlib.util
-import os
 from pathlib import Path
 
 import anthropic
 import pytest
 from anthropic.types import Message
 
-from claude_vi import ClaudeVi, ModelRuleError, Settings, estimate_cost_usd
-from claude_vi.mock import MockAnthropic
+from claude_vi import ModelRuleError, estimate_cost_usd
+from claude_vi.cham import nap as _nap
+from claude_vi.cham import tao_client as _tao_client
 
 MODULE = Path(__file__).resolve().parents[1]
-THU_MUC = os.getenv("CHAM", "solutions")
 
 
 def nap(ten: str):
-    path = MODULE / THU_MUC / f"{ten}.py"
-    spec = importlib.util.spec_from_file_location(f"m01_{THU_MUC}_{ten}", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-SETTINGS = Settings(model="claude-haiku-5-5", max_tokens=512, mock=True, record=False)
+    return _nap(MODULE, ten)
 
 
 def tao_client(errors=None):
-    """Client mock có ghi lại tham số mỗi request (bản sao sâu, để thấy lịch sử bị sửa sau đó)."""
-    mock = MockAnthropic(errors=errors)
-    goc = mock.messages.create
-    mock.da_gui = []
-
-    def create(**params):
-        mock.da_gui.append(copy.deepcopy(params))
-        return goc(**params)
-
-    mock.messages.create = create
-    return ClaudeVi(settings=SETTINGS, client=mock), mock
+    return _tao_client(errors=errors)
 
 
 def message(stop_reason="end_turn", output=18, thinking=6, model="claude-haiku-5-5"):
