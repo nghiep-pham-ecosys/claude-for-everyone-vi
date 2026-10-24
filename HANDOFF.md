@@ -1,6 +1,6 @@
 # HANDOFF — việc cần làm (bàn giao 24/10/2026)
 
-Khung repo đã dựng và đã chạy thử: 12 test xanh, 2 checker sạch, `hello.py` chạy ở mock mode. Làm lần lượt từng bước; xong mỗi bước thì đánh dấu ở đây và báo Nghiệp.
+Khung repo đã dựng và đã chạy thử: 12 test xanh, 2 checker sạch, `hello.py` chạy ở mock mode. Cập nhật 24/10/2026: Bước 0–4 xong và đã merge vào `main` (104 test xanh); việc tiếp theo nằm ở mục "Còn treo" và các module 04+. Làm lần lượt từng bước; xong mỗi bước thì đánh dấu ở đây và báo Nghiệp.
 
 ## Bước 0 — Tạo repo và push (làm đầu tiên)
 
@@ -52,14 +52,14 @@ Xong khi: mọi script chạy với `CLAUDE_MOCK=1`, 4 lệnh trong CLAUDE.md xa
 
 ## Bước 3 — Module 02 Prompt engineering, Module 03 Tool use
 
-> 🟡 **Xong phần làm, chờ merge** (24/10/2026). Module 02: PR #3 (`feat/module-02`). Module 03: PR `feat/module-03`, xếp chồng trên PR #3.
+> ✅ **Xong 24/10/2026**, đã merge: module 02 (PR #3), module 03 (PR #4).
 > `claude_vi` mô phỏng thêm: effort (token thinking), structured outputs (JSON đúng schema), tool use (gọi song song, `disable_parallel_tool_use`, `none`, forced bỏ thinking), và trả 400 khi block thinking trong vòng lặp tool bị sửa. `rules.py` chặn thêm: thinking `enabled`/`between_tools` sai model, effort lạ, schema strict/structured outputs không hợp lệ, tên tool sai, tool_result thiếu/sai chỗ.
 
 Theo khuôn module 01. Module 03 lưu ý: `tool_choice` chỉ dùng `auto`; dạy strict tool use; thinking block phải gửi lại nguyên vẹn trong tool loop.
 
 ## Bước 4 — Capstone c2: trích xuất dữ liệu thí nghiệm từ PDF
 
-> 🟡 **Xong phần làm, chờ merge** (24/10/2026, PR `feat/capstone-c2`, xếp chồng trên PR module 03). Pipeline 3 bước vì citations + structured outputs không dùng chung được (docs Citations): lượt 1 citations lấy trích dẫn + trang, lượt 2 structured outputs với `enum` id nguồn, bước 3 code đối chiếu text từng trang (`pypdf`). PDF mẫu tự sinh (`data/tao_pdf_mau.py`, ghi ở NOTICE.md). Mock đọc PDF thật để trả `page_location`. Chưa chạy với API thật.
+> ✅ **Xong 24/10/2026**, đã merge (PR #5). Pipeline 3 bước vì citations + structured outputs không dùng chung được (docs Citations): lượt 1 citations lấy trích dẫn + trang, lượt 2 structured outputs với `enum` id nguồn, bước 3 code đối chiếu text từng trang (`pypdf`). PDF mẫu tự sinh (`data/tao_pdf_mau.py`, ghi ở NOTICE.md). Mock đọc PDF thật để trả `page_location`. Chưa chạy với API thật.
 
 Cần structured outputs + citations. Dùng PDF mẫu tự tạo hoặc giấy phép mở (ghi nguồn ở NOTICE.md). Đề bài: vật liệu/môi trường/đo lường — không hoá chất nguy hiểm.
 
