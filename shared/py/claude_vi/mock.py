@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Self
@@ -191,6 +192,57 @@ class MockMessageStream:
         return self._final
 
 
+_SO = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def _cau_co_so_lieu(text: str) -> bool:
+    """Heuristic của mock: một câu "có số liệu" nếu kết thúc bằng dấu chấm và có ít nhất 2 con số."""
+    return text.strip().endswith(".") and len(_SO.findall(text)) >= 2
+
+
+def _citation_payload(params: dict[str, Any]) -> dict[str, Any] | None:
+    """Document có citations.enabled: trích mọi câu có số liệu, kèm vị trí như API thật.
+
+    Mock không hiểu nội dung — nó chỉ chọn câu theo heuristic để học viên luyện ĐỌC citations.
+    """
+    docs = [b for m in params.get("messages") or [] for b in _blocks(m) if _field(b, "type") == "document"]
+    if not any((_field(d, "citations") or {}).get("enabled") for d in docs):
+        return None
+    blocks = []
+    for idx, doc in enumerate(docs):
+        if not (_field(doc, "citations") or {}).get("enabled"):
+            continue
+        source = _field(doc, "source") or {}
+        title = _field(doc, "title")
+        if source.get("media_type") == "application/pdf":
+            import base64
+            import io
+
+            from pypdf import PdfReader
+
+            reader = PdfReader(io.BytesIO(base64.b64decode(source["data"])))
+            for page_no, page in enumerate(reader.pages, 1):
+                for line in (page.extract_text() or "").splitlines():
+                    if _cau_co_so_lieu(line):
+                        blocks.append({"type": "text", "text": line.strip(), "citations": [{
+                            "type": "page_location", "cited_text": line.strip(), "document_index": idx,
+                            "document_title": title, "start_page_number": page_no,
+                            "end_page_number": page_no + 1}]})
+        elif source.get("type") == "text":
+            data = source["data"]
+            # câu kết thúc ở dấu chấm theo sau là khoảng trắng hoặc hết chuỗi (không cắt ở "7.1")
+            for m in re.finditer(r"\S[^\n]*?\.(?=\s|$)", data):
+                if _cau_co_so_lieu(m.group()):
+                    blocks.append({"type": "text", "text": m.group(), "citations": [{
+                        "type": "char_location", "cited_text": m.group(), "document_index": idx,
+                        "document_title": title, "start_char_index": m.start(), "end_char_index": m.end()}]})
+    payload = _default_payload(params)
+    thinking = [b for b in payload["content"] if b["type"] == "thinking"]
+    intro = {"type": "text", "text": "[MOCK] Các câu có số liệu trong tài liệu:\n"}
+    payload["content"] = [*thinking, intro, *blocks]
+    return payload
+
+
 _THINKING_MODIFIED = (
     "messages.{i}.content: `thinking` or `redacted_thinking` blocks in the latest assistant message cannot be "
     "modified. These blocks must remain as they were in the original response."
@@ -277,7 +329,7 @@ class _MockMessages:
         if path.exists():
             payload = json.loads(path.read_text("utf-8"))
         else:
-            payload = self._tool_payload(params) or _default_payload(params)
+            payload = self._tool_payload(params) or _citation_payload(params) or _default_payload(params)
         payload.setdefault("model", params["model"])
         return Message.model_validate(payload)
 

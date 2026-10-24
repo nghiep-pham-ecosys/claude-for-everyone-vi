@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import os
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -23,8 +24,10 @@ def nap(module_dir: Path, ten: str) -> ModuleType:
     """Nạp file bài `ten`.py từ solutions/ (mặc định) hoặc thư mục trong biến CHAM."""
     thu_muc = os.getenv("CHAM", "solutions")
     path = Path(module_dir) / thu_muc / f"{ten}.py"
-    spec = importlib.util.spec_from_file_location(f"cham_{Path(module_dir).name}_{thu_muc}_{ten}", path)
+    ten_module = f"cham_{Path(module_dir).name}_{thu_muc}_{ten}".replace("-", "_")
+    spec = importlib.util.spec_from_file_location(ten_module, path)
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[ten_module] = mod  # dataclass trong file bài cần module có trong sys.modules
     spec.loader.exec_module(mod)
     return mod
 
