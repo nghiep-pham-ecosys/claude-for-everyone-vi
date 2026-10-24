@@ -26,6 +26,8 @@ jobs:
             uv run python "$f"
             echo "::endgroup::"
           done
+      - name: Capstone chạy được ở mock mode
+        run: uv run python capstones/c2-trich-xuat-pdf/pipeline.py
 
   live-smoke:
     # Gọi API thật, rất ít token. Cần duyệt thủ công qua GitHub Environment.

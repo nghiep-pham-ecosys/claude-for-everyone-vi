@@ -12,6 +12,12 @@ Repo này **liên kết** tới tài nguyên dưới đây; không sao chép tr�
 | anthropics/prompt-eng-interactive-tutorial | **Không khai báo giấy phép ở gốc** | Chỉ liên kết |
 | anthropics/claude-code | Độc quyền | Chỉ liên kết |
 
+## Dữ liệu mẫu tự tạo
+
+| File | Nguồn | Giấy phép |
+|---|---|---|
+| `capstones/c2-trich-xuat-pdf/data/bao_cao_thi_nghiem.pdf` | Repo tự sinh bằng `data/tao_pdf_mau.py` (24/10/2026). Số liệu bịa, không lấy từ tài liệu nào | Nội dung CC BY 4.0, script MIT |
+
 ## Nội dung đã chuyển thể
 
 _(chưa có)_ — mỗi mục thêm vào phải ghi: file nguồn, commit, giấy phép, thay đổi đã làm.

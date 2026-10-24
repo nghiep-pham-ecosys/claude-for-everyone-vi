@@ -59,6 +59,8 @@ Theo khuôn module 01. Module 03 lưu ý: `tool_choice` chỉ dùng `auto`; dạ
 
 ## Bước 4 — Capstone c2: trích xuất dữ liệu thí nghiệm từ PDF
 
+> 🟡 **Xong phần làm, chờ merge** (24/10/2026, PR `feat/capstone-c2`, xếp chồng trên PR module 03). Pipeline 3 bước vì citations + structured outputs không dùng chung được (docs Citations): lượt 1 citations lấy trích dẫn + trang, lượt 2 structured outputs với `enum` id nguồn, bước 3 code đối chiếu text từng trang (`pypdf`). PDF mẫu tự sinh (`data/tao_pdf_mau.py`, ghi ở NOTICE.md). Mock đọc PDF thật để trả `page_location`. Chưa chạy với API thật.
+
 Cần structured outputs + citations. Dùng PDF mẫu tự tạo hoặc giấy phép mở (ghi nguồn ở NOTICE.md). Đề bài: vật liệu/môi trường/đo lường — không hoá chất nguy hiểm.
 
 ## Còn treo (cần key thật — chờ Nghiệp quyết)

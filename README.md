@@ -23,7 +23,7 @@ Có key rồi? Sao chép `.env.example` thành `.env`, điền `ANTHROPIC_API_KE
 | Nâng cao | 08 Agents & workflows · 09 Agent SDK · 10 MCP | 📋 |
 | Mở cho cộng đồng | 11 Claude Code · 12 Agent Skills · 13 Evals · 14 Production · 15 Research | 🤝 |
 
-Capstone đầu tiên: **trích xuất dữ liệu thí nghiệm từ PDF ra JSON có schema, kèm trích dẫn trang gốc.**
+Capstone đầu tiên: [**trích xuất dữ liệu thí nghiệm từ PDF ra JSON có schema, kèm trích dẫn trang gốc**](capstones/c2-trich-xuat-pdf) — citations + structured outputs + kiểm chứng bằng code.
 
 ## Ba nguyên tắc của repo
 

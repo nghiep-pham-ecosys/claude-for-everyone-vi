@@ -34,6 +34,7 @@ Cả 4 lệnh phải xanh trước mỗi commit.
 - `shared/py/claude_vi/` — wrapper: `rules.py` chặn request sẽ lỗi 400; `mock.py` trả fixture đã validate bằng `anthropic.types.Message` (fixture sai shape thì test đỏ); `client.py` có `CLAUDE_RECORD=1` để ghi fixture từ API thật.
 - `scripts/` — checker cho CI; `model_sync.py` đối chiếu YAML với Models API (test bằng `tests/fixtures/models_list.json`). `tests/` cố ý dùng model sai nên bị loại khỏi `check_models`; `shared/` cố ý nhắc pattern cũ nên bị loại khỏi `check_legacy_params`.
 - `modules/NN-ten/` — mỗi module: `README.md`, `python/NN_y.py` (mỗi script một ý), `exercises/` + `solutions/`, `tests/test_moduleNN.py` (chấm lời giải; `CHAM=exercises` để chấm bài học viên), `quiz.md`, `references.md`. Khuôn mẫu: module 01.
+- `capstones/cN-ten/` — `README.md` (đề bài, tiêu chí), `pipeline.py` (phần nối cho sẵn), `exercises/` + `solutions/`, `tests/`, `data/`.
 - `docs/kiem-chung-2026-10-21.md` — bảng đối chiếu dữ kiện; đọc trước khi viết nội dung.
 
 ## Văn phong
