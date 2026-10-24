@@ -19,8 +19,13 @@ jobs:
       - run: uv run pytest -q
       - run: uv run python scripts/check_models.py
       - run: uv run python scripts/check_legacy_params.py
-      - name: Ví dụ module 01 chạy được ở mock mode
-        run: uv run python modules/01-messages-api/python/hello.py
+      - name: Mọi script bài học chạy được ở mock mode
+        run: |
+          for f in modules/*/python/*.py; do
+            echo "::group::$f"
+            uv run python "$f"
+            echo "::endgroup::"
+          done
 
   live-smoke:
     # Gọi API thật, rất ít token. Cần duyệt thủ công qua GitHub Environment.
@@ -34,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
-      - run: uv run python modules/01-messages-api/python/hello.py
+      - run: uv run python modules/01-messages-api/python/01_hello.py
 
   model-sync:
     # Đối chiếu config/models.yaml với Models API mỗi thứ Hai, lệch thì mở issue.

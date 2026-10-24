@@ -1,6 +1,6 @@
 """Module 01 — lời gọi đầu tiên.
 
-Chạy:  CLAUDE_MOCK=1 uv run python modules/01-messages-api/python/hello.py
+Chạy:  CLAUDE_MOCK=1 uv run python modules/01-messages-api/python/01_hello.py
 """
 import sys
 from pathlib import Path
