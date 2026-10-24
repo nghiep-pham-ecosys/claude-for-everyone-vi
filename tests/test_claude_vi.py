@@ -300,3 +300,47 @@ def test_stream_tool_use(mock_client):
     with c.stream(messages=[{"role": "user", "content": "x"}], tools=[TOOL]) as s:
         msg = s.get_final_message()
     assert msg.content[-1].type == "tool_use"
+
+
+def _pdf_doc():
+    import base64
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "capstones/c2-trich-xuat-pdf/data/tao_pdf_mau.py"
+    spec = importlib.util.spec_from_file_location("tao_pdf_mau", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    data = base64.b64encode(mod.build_pdf()).decode()
+    return {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": data},
+            "title": "Báo cáo", "citations": {"enabled": True}}
+
+
+def test_mock_pdf_citations_have_page_numbers(mock_client):
+    c, _ = mock_client
+    msg = c.create(messages=[{"role": "user", "content": [_pdf_doc(), {"type": "text", "text": "Trích số liệu"}]}])
+    cits = [cit for b in msg.content if b.type == "text" for cit in (b.citations or [])]
+    assert cits and all(cit.type == "page_location" for cit in cits)
+    by_page = {cit.start_page_number for cit in cits}
+    assert by_page == {1, 2}
+    a1 = next(cit for cit in cits if cit.cited_text.startswith("Specimen A1"))
+    assert a1.start_page_number == 1 and a1.end_page_number == 2 and "276 MPa" in a1.cited_text
+
+
+def test_mock_text_citations_char_location(mock_client):
+    c, _ = mock_client
+    data = "Mẫu nước sạch. Mẫu W1 có pH 7.1 và DO 6.2 mg/L. Hết."
+    doc = {"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": data},
+           "citations": {"enabled": True}}
+    msg = c.create(messages=[{"role": "user", "content": [doc, {"type": "text", "text": "?"}]}])
+    cit = next(cit for b in msg.content if b.type == "text" for cit in (b.citations or []))
+    assert cit.type == "char_location"
+    assert data[cit.start_char_index:cit.end_char_index] == cit.cited_text == "Mẫu W1 có pH 7.1 và DO 6.2 mg/L."
+
+
+def test_citations_and_structured_outputs_conflict():
+    params = {"model": "claude-haiku-5-5", "messages": [{"role": "user", "content": [_pdf_doc()]}],
+              "output_config": {"format": {"type": "json_schema", "schema": {
+                  "type": "object", "properties": {}, "additionalProperties": False}}}}
+    with pytest.raises(ModelRuleError, match="không dùng chung"):
+        check_request(params)

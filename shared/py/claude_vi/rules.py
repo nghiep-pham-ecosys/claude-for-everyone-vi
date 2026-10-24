@@ -83,6 +83,11 @@ def check_request(params: dict[str, Any]) -> None:
         )
 
     errors += tool_errors(params)
+    if fmt is not None and _citations_enabled(params):
+        errors.append(
+            "Citations và structured outputs không dùng chung được (docs Citations). "
+            "Tách thành hai lời gọi: một lượt lấy trích dẫn, một lượt chuyển sang JSON."
+        )
 
     messages = params.get("messages") or []
     if messages and messages[-1].get("role") == "assistant" and not rules.get("assistant_prefill_allowed", True):
@@ -174,4 +179,14 @@ def tool_errors(params: dict[str, Any]) -> list[str]:
             errors.append(f"messages.{i + 1}: tool_result trỏ tới tool_use_id không có ở lượt trước: "
                           f"{', '.join(sorted(extra))}")
     return errors
+
+
+def _citations_enabled(params: dict[str, Any]) -> bool:
+    for msg in params.get("messages") or []:
+        for block in _blocks(msg):
+            citations = _field(block, "citations")
+            if _field(block, "type") in ("document", "search_result") and isinstance(citations, dict) \
+                    and citations.get("enabled"):
+                return True
+    return False
 

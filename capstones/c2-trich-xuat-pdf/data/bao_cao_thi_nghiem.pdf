@@ -1,0 +1,69 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 1014 >>
+stream
+BT
+/F1 15 Tf 1 0 0 1 56 790 Tm (Lab Report LR-2026-07: Tensile Test of Aluminium 6061-T6) Tj
+/F1 10 Tf 1 0 0 1 56 767 Tm (Prepared for teaching purposes. All values are synthetic.) Tj
+/F1 10 Tf 1 0 0 1 56 749 Tm () Tj
+/F1 12 Tf 1 0 0 1 56 731 Tm (1. Method) Tj
+/F1 10 Tf 1 0 0 1 56 711 Tm (Specimens were machined to ASTM E8 subsize geometry and tested at 22 C) Tj
+/F1 10 Tf 1 0 0 1 56 693 Tm (with a crosshead speed of 2 mm/min. Three specimens were tested.) Tj
+/F1 10 Tf 1 0 0 1 56 675 Tm () Tj
+/F1 12 Tf 1 0 0 1 56 657 Tm (2. Results) Tj
+/F1 10 Tf 1 0 0 1 56 637 Tm (Specimen A1: yield strength 276 MPa, tensile strength 310 MPa, elongation 12.1 %.) Tj
+/F1 10 Tf 1 0 0 1 56 619 Tm (Specimen A2: yield strength 281 MPa, tensile strength 314 MPa, elongation 11.4 %.) Tj
+/F1 10 Tf 1 0 0 1 56 601 Tm (Specimen A3: yield strength 269 MPa, tensile strength 305 MPa, elongation 13.0 %.) Tj
+/F1 10 Tf 1 0 0 1 56 583 Tm () Tj
+/F1 10 Tf 1 0 0 1 56 565 Tm (Specimen A2 showed a small surface scratch before testing.) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 791 >>
+stream
+BT
+/F1 15 Tf 1 0 0 1 56 790 Tm (Lab Report LR-2026-08: River Water Quality, Station W3) Tj
+/F1 10 Tf 1 0 0 1 56 767 Tm (Prepared for teaching purposes. All values are synthetic.) Tj
+/F1 10 Tf 1 0 0 1 56 749 Tm () Tj
+/F1 12 Tf 1 0 0 1 56 731 Tm (1. Sampling) Tj
+/F1 10 Tf 1 0 0 1 56 711 Tm (Grab samples were collected on 2026-09-14 at 0.5 m depth and analysed within 6 h.) Tj
+/F1 10 Tf 1 0 0 1 56 693 Tm () Tj
+/F1 12 Tf 1 0 0 1 56 675 Tm (2. Results) Tj
+/F1 10 Tf 1 0 0 1 56 655 Tm (Sample W3-a: pH 7.2, dissolved oxygen 6.8 mg/L, turbidity 14 NTU.) Tj
+/F1 10 Tf 1 0 0 1 56 637 Tm (Sample W3-b: pH 6.9, dissolved oxygen 5.9 mg/L, turbidity 22 NTU.) Tj
+/F1 10 Tf 1 0 0 1 56 619 Tm () Tj
+/F1 10 Tf 1 0 0 1 56 601 Tm (Turbidity of W3-b was measured twice; the reported value is the mean.) Tj
+ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000218 00000 n 
+0000000344 00000 n 
+0000001410 00000 n 
+0000001536 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2378
+%%EOF
