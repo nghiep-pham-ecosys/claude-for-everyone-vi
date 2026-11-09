@@ -1,9 +1,10 @@
-from .client import ClaudeVi, estimate_cost_usd, text_of
+from .client import ClaudeVi, MissingKeyError, estimate_cost_usd, text_of
 from .config import Settings, load_models
 from .rules import ModelRuleError, check_request
 
 __all__ = [
     "ClaudeVi",
+    "MissingKeyError",
     "ModelRuleError",
     "Settings",
     "check_request",

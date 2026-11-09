@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from anthropic.types import Message
 
-from .config import Settings
+from .config import REPO_ROOT, Settings
 from .mock import FIXTURE_DIR, MockAnthropic, request_key
 from .rules import check_request
+
+
+class MissingKeyError(RuntimeError):
+    """Không ở mock mode mà cũng không có key: báo sớm, rõ ràng, thay vì TypeError của SDK lúc gọi."""
 
 
 class ClaudeVi:
@@ -28,10 +33,17 @@ class ClaudeVi:
         elif self.settings.mock:
             self._client = MockAnthropic()
         else:
-            from dotenv import load_dotenv
             from anthropic import Anthropic
 
-            load_dotenv()
+            # Settings.from_env() đã nạp .env; kiểm lại ở đây vì Settings có thể được tạo tay
+            from dotenv import load_dotenv
+
+            load_dotenv(REPO_ROOT / ".env", override=False)
+            if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
+                raise MissingKeyError(
+                    "Chưa có API key. Chạy không cần key: đặt CLAUDE_MOCK=1. "
+                    "Chạy thật: cp .env.example .env rồi điền ANTHROPIC_API_KEY (xem modules/00-setup)."
+                )
             self._client = Anthropic()
 
     def _prepare(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -49,6 +61,7 @@ class ClaudeVi:
         params = self._prepare(params)
         msg = self._client.messages.create(**params)
         if self.settings.record and not self.settings.mock:
+            FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
             path = FIXTURE_DIR / f"{request_key(params)}.json"
             path.write_text(json.dumps(msg.model_dump(mode="json"), ensure_ascii=False, indent=2), "utf-8")
         return msg
