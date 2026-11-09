@@ -8,7 +8,8 @@ Mọi dữ kiện về API, giá và hành vi model trong module này được k
 | Tham chiếu đầy đủ tham số | [Messages API reference](https://platform.claude.com/docs/en/api/messages/create) | Mục 1 |
 | Các giá trị `stop_reason`, `stop_details` | [Handling stop reasons](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons) | Mục 4, bài 2 |
 | Thinking bật sẵn, `display` mặc định `"omitted"`, thinking tính là output token và vào `max_tokens`; tắt thinking theo từng model | [Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking) | Mục 3, 5, "Điều gì đã thay đổi" |
-| Mã lỗi, `request-id`, SDK tự retry 2 lần và tôn trọng `retry-after`, giới hạn 32 MB, lỗi thinking block bị sửa / gắn với hội thoại khác | [Claude API errors](https://platform.claude.com/docs/en/api/errors) | Mục 7, bài 3 |
+| Mã lỗi, `request-id`, SDK tự retry 2 lần và tôn trọng `retry-after`, lỗi thinking block bị sửa / gắn với hội thoại khác | [Claude API errors](https://platform.claude.com/docs/en/api/errors) | Mục 7, bài 3 |
+| Giới hạn kích thước request Messages API tăng từ 32 MB lên 128 MB trên Claude API (kiểm 09/11/2026) | [Release notes 28/10/2026](https://platform.claude.com/docs/en/release-notes/overview), [Request size limits](https://platform.claude.com/docs/en/api/overview#request-size-limits) | Mục 7 |
 | Thứ tự event SSE, `usage` cộng dồn, `thinking_delta` / `signature_delta`, event `error` giữa stream | [Streaming messages](https://platform.claude.com/docs/en/build-with-claude/streaming) | Mục 6 |
 | Giá theo MTok; Haiku 5.5 có giá cao hơn khi prompt trên 100.000 token | [Pricing](https://platform.claude.com/docs/en/about-claude/pricing) | Mục 5, chi phí ước tính |
 | Rate limit, spend limit | [Rate limits](https://platform.claude.com/docs/en/api/rate-limits) | Mục 7 |
