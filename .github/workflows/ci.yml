@@ -30,18 +30,19 @@ jobs:
         run: uv run python capstones/c2-trich-xuat-pdf/pipeline.py
 
   live-smoke:
-    # Gọi API thật, rất ít token. Cần duyệt thủ công qua GitHub Environment.
+    # Gọi API thật. Chỉ chạy khi bấm "Run workflow" và được duyệt qua GitHub Environment live-api.
+    # Chạy cùng tập script với job test (scripts/chay_that.py) và kiểm 2 giả định về Haiku 5.5.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: live-api
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      MAX_TOKENS: "256"
+      MAX_TOKENS: "1024"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
-      - run: uv run python modules/01-messages-api/python/01_hello.py
+      - run: uv run python scripts/chay_that.py --dong-y --gia-dinh
 
   model-sync:
     # Đối chiếu config/models.yaml với Models API mỗi thứ Hai, lệch thì mở issue.
