@@ -142,7 +142,7 @@ Lưu ý: `usage` trong `message_delta` là số **cộng dồn**, không phải 
 | 400 | `invalid_request_error` — request sai (hoặc chạm spend limit bạn tự đặt) | Không. Sửa request |
 | 401 / 403 | Key sai / không có quyền | Không |
 | 404 | Sai đường dẫn hoặc ID | Không |
-| 413 | Request quá lớn (Messages API: 32 MB) | Không |
+| 413 | Request quá lớn (Messages API trên Claude API: 128 MB từ 28/10/2026, trước đó 32 MB) | Không |
 | 429 | `rate_limit_error` — vượt rate limit | Có, theo `retry-after` |
 | 429 | `rate_limit_error` với `error.details.error_code = "enforced_spend_limit_reached"` — chạm spend cap của tier | Không: không có `retry-after`, thử lại vẫn lỗi tới đầu tháng sau |
 | 500 | `api_error` — lỗi nội bộ | Có, với backoff |

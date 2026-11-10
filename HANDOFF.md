@@ -1,6 +1,6 @@
 # HANDOFF — việc cần làm (bàn giao 24/10/2026)
 
-Khung repo đã dựng và đã chạy thử: 12 test xanh, 2 checker sạch, `hello.py` chạy ở mock mode. Cập nhật 24/10/2026: Bước 0–4 xong và đã merge vào `main` (104 test xanh); việc tiếp theo nằm ở mục "Còn treo" và các module 04+. Làm lần lượt từng bước; xong mỗi bước thì đánh dấu ở đây và báo Nghiệp.
+Khung repo đã dựng và đã chạy thử: 12 test xanh, 2 checker sạch, `hello.py` chạy ở mock mode. Cập nhật 24/10/2026: Bước 0–4 xong và đã merge vào `main` (104 test xanh). Cập nhật 09/11/2026: Nghiệp duyệt thứ tự Bước 5–9 bên dưới; **vẫn chưa dùng API** — code phải sẵn sàng để cắm key là chạy (mục "Khi cắm key"). Làm lần lượt từng bước; xong mỗi bước thì đánh dấu ở đây và báo Nghiệp.
 
 ## Bước 0 — Tạo repo và push (làm đầu tiên)
 
@@ -63,8 +63,47 @@ Theo khuôn module 01. Module 03 lưu ý: `tool_choice` chỉ dùng `auto`; dạ
 
 Cần structured outputs + citations. Dùng PDF mẫu tự tạo hoặc giấy phép mở (ghi nguồn ở NOTICE.md). Đề bài: vật liệu/môi trường/đo lường — không hoá chất nguy hiểm.
 
+## Bước 5 — Sẵn sàng chạy API thật (không gọi API)
+
+> ✅ **Xong 09/11/2026** (PR `chore/san-sang-api`).
+> - `Settings.from_env()` nạp `.env` ở gốc repo trước khi đọc biến. Trước đây `.env` chỉ được nạp sau khi đã đọc `CLAUDE_MODEL`/`MAX_TOKENS`/`CLAUDE_RECORD`, nên các biến này trong `.env` bị bỏ qua. Shell vẫn được ưu tiên.
+> - Thiếu key mà không mock: `MissingKeyError` tiếng Việt thay cho `TypeError` của SDK.
+> - `scripts/chay_that.py`: liệt kê (mặc định) hoặc chạy thật (`--dong-y`) cùng tập script với job `test`; `--gia-dinh` kiểm 2 giả định Haiku 5.5; `--ghi` ghi fixture. Job `live-smoke` dùng script này.
+> - `conftest.py` ở gốc: test luôn dùng thư mục fixture rỗng, nên fixture ghi thật không làm đổi kết quả test.
+> - Release notes 24/10–05/11 không đổi model nào; giới hạn request 32 → 128 MB (module 01 đã sửa).
+
+## Bước 6 — Module 05 Structured outputs, PDF, Citations
+
+Đặt trước 04 vì mock đã có sẵn (citations, structured outputs, đọc PDF) và capstone c2 đang dùng kiến thức này mà chưa module nào dạy. Theo khuôn module 01.
+
+## Bước 7 — Module 07 Thinking
+
+Adaptive thinking, `display: "summarized"`, effort, `between_tools` (Sonnet 5.5), block thinking trong lịch sử. Phần lớn đã có trong `claude_vi`.
+
+## Bước 8 — Module 06 Chi phí
+
+Prompt caching (mock cần thêm `cache_creation_input_tokens`/`cache_read_input_tokens`, `estimate_cost_usd` tính giá cache), token counting, Batch API, message threads (beta 02/11/2026).
+
+## Bước 9 — Module 04 RAG
+
+Chờ Nghiệp chọn: embedding bên ngoài (Voyage, thêm key), BM25/embedding local (không cần key), hay chỉ contextual retrieval trên tập nhỏ.
+
+## Việc có hạn
+
+- **Sau 30/11/2026:** Sonnet 4.5 retire. Đổi `status: retired` cho model này trong `config/models.yaml`.
+
+## Khi cắm key (làm theo thứ tự, chờ Nghiệp nói rõ — luật 1)
+
+1. Đặt spend limit cho workspace học tập trên Console. `cp .env.example .env`, điền `ANTHROPIC_API_KEY`, để `CLAUDE_MOCK=0`.
+2. `uv run python scripts/chay_that.py --dong-y --gia-dinh --chi 01-messages-api/python/01_hello` — một request, xác nhận key chạy.
+3. `uv run python scripts/chay_that.py --dong-y --gia-dinh` — mọi script + 2 giả định Haiku 5.5. Script nào lỗi thì sửa (mock có thể lệch API thật).
+4. `uv run python scripts/model_sync.py` — đối chiếu `config/models.yaml` với Models API; lệch thì `--write`.
+5. (Tuỳ chọn) `--ghi` để ghi fixture thật, xem lại rồi commit.
+6. GitHub: tạo Environment `live-api` có reviewer, thêm secret `ANTHROPIC_API_KEY`; trong `ci.yml` đổi `model-sync` từ `if: false` thành `github.event_name == 'schedule'`.
+
 ## Còn treo (cần key thật — chờ Nghiệp quyết)
 
 - Haiku 5.5: `forced_tool_choice_allowed` và `thinking_disabled_allowed` đang là giả định (`true`). Bước 1 trả lời được ý thứ hai qua Models API; ý thứ nhất cần một request thật.
   - Cập nhật 24/10: docs đã trả lời cả hai ý. [Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking): Haiku 5.5 nhận `thinking: {"type": "disabled"}` ở effort `high` trở xuống. [Define tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools): Haiku 5.5 nhận `tool_choice` any/tool (khi đó bỏ thinking). Comment trong `config/models.yaml` đã cập nhật; vẫn nên xác nhận bằng request thật khi có key.
-- Ghi fixture thật bằng `CLAUDE_RECORD=1`.
+  - Cập nhật 09/11: `scripts/chay_that.py --dong-y --gia-dinh` kiểm cả hai bằng request thật khi có key.
+- Ghi fixture thật bằng `CLAUDE_RECORD=1` (hoặc `chay_that.py --ghi`).

@@ -28,6 +28,11 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        # Nạp .env ở gốc repo TRƯỚC khi đọc biến, để CLAUDE_MODEL/MAX_TOKENS/CLAUDE_RECORD trong .env có hiệu lực.
+        # Biến đã đặt trong shell (ví dụ CLAUDE_MOCK=1 ở CI) được ưu tiên, .env không ghi đè.
+        from dotenv import load_dotenv
+
+        load_dotenv(REPO_ROOT / ".env", override=False)
         cfg = load_models()
         return cls(
             model=os.getenv("CLAUDE_MODEL", cfg["default_model"]),
