@@ -80,6 +80,8 @@ Cần structured outputs + citations. Dùng PDF mẫu tự tạo hoặc giấy p
 
 ## Bước 7 — Module 07 Thinking
 
+> ✅ **Xong 09/11/2026** (PR `feat/module-07`, xếp chồng trên module 05), chờ Nghiệp duyệt. 5 script, 3 bài + lời giải + 27 test, quiz 10 câu, references (kiểm 09/11). Thêm `claude-fable-5-2` (ra mắt 09/11) vào `config/models.yaml`, cùng 2 cờ mới cho mọi model active: `prefix_check`, `mid_conversation_system_allowed`. `claude_vi`: mock trả tóm tắt khi `display: "summarized"`, chữ ký riêng từng block, `MockAnthropic(redacted=True)`, prefix check (hành xử như tài khoản tạo từ 31/8/2026); rules chặn `display` sai, `between_tools` kèm trường khác, beta (`display: "updates"`, `block_binding`, effort theo message), và sai vị trí message `system`. Chưa chạy với API thật.
+
 Adaptive thinking, `display: "summarized"`, effort, `between_tools` (Sonnet 5.5), block thinking trong lịch sử. Phần lớn đã có trong `claude_vi`.
 
 ## Bước 8 — Module 06 Chi phí
