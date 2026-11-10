@@ -27,6 +27,8 @@ models:
       assistant_prefill_allowed: false
       thinking_enabled_allowed: false
       between_tools_allowed: false # chỉ Sonnet 5.5 (docs Thinking)
+      prefix_check: true                  # docs Preserved thinking: sửa system/tools/message cũ -> block thinking sau đó hỏng (kiểm 2026-11-09)
+      mid_conversation_system_allowed: true  # docs Mid-conversation system messages (kiểm 2026-11-09)
     default_effort: high # docs Effort
 
   claude-fable-5-1:
@@ -39,6 +41,8 @@ models:
       assistant_prefill_allowed: false
       thinking_enabled_allowed: false # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
       between_tools_allowed: false # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+      prefix_check: true                  # docs Preserved thinking: sửa system/tools/message cũ -> block thinking sau đó hỏng (kiểm 2026-11-09)
+      mid_conversation_system_allowed: true  # docs Mid-conversation system messages (kiểm 2026-11-09)
     default_effort: high # docs Effort, kiểm 2026-10-24
 
   claude-opus-5-5:
@@ -51,6 +55,8 @@ models:
       assistant_prefill_allowed: false
       thinking_enabled_allowed: false # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
       between_tools_allowed: false # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+      prefix_check: true                  # docs Preserved thinking: sửa system/tools/message cũ -> block thinking sau đó hỏng (kiểm 2026-11-09)
+      mid_conversation_system_allowed: true  # docs Mid-conversation system messages (kiểm 2026-11-09)
     default_effort: medium # docs Effort, kiểm 2026-10-24
 
   claude-sonnet-5-5:
@@ -63,6 +69,8 @@ models:
       assistant_prefill_allowed: false
       thinking_enabled_allowed: false # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
       between_tools_allowed: true # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+      prefix_check: true                  # docs Preserved thinking: sửa system/tools/message cũ -> block thinking sau đó hỏng (kiểm 2026-11-09)
+      mid_conversation_system_allowed: true  # docs Mid-conversation system messages (kiểm 2026-11-09)
     default_effort: high # docs Effort, kiểm 2026-10-24
 
   claude-haiku-5-5:
@@ -75,6 +83,8 @@ models:
       assistant_prefill_allowed: false # 2026-10-07
       thinking_enabled_allowed: false # extended thinking đã bỏ từ 4.7 (docs Errors, kiểm 2026-10-24)
       between_tools_allowed: false # chỉ Sonnet 5.5 (docs Errors, kiểm 2026-10-24)
+      prefix_check: true                  # docs Preserved thinking: sửa system/tools/message cũ -> block thinking sau đó hỏng (kiểm 2026-11-09)
+      mid_conversation_system_allowed: true  # docs Mid-conversation system messages (kiểm 2026-11-09)
     default_effort: medium # docs Effort, kiểm 2026-10-24
 
   claude-sonnet-4-5-20250929:

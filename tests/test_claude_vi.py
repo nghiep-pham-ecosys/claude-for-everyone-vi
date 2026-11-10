@@ -2,7 +2,6 @@ import json
 
 import anthropic
 import pytest
-
 from claude_vi import ClaudeVi, ModelRuleError, Settings, check_request, estimate_cost_usd, text_of
 from claude_vi.mock import MockAnthropic, request_key
 
@@ -404,3 +403,115 @@ def test_schema_pattern_support(pattern, ok):
 
     errs = schema_errors({"type": "string", "pattern": pattern})
     assert (errs == []) is ok
+
+
+# ---------- Thinking: display, redacted, prefix check, message system giữa hội thoại ----------
+
+def test_display_summarized_returns_text_but_same_billing(mock_client):
+    c, _ = mock_client
+    an = c.ask("x")
+    hien = c.ask("x", thinking={"type": "adaptive", "display": "summarized"})
+    assert an.content[0].thinking == "" and hien.content[0].thinking.startswith("[MOCK]")
+    assert an.usage.output_tokens == hien.usage.output_tokens          # tóm tắt không làm đổi số token bị tính
+    assert an.content[0].signature != hien.content[0].signature        # mỗi block một chữ ký
+
+
+@pytest.mark.parametrize("model,thinking,needle", [
+    ("claude-haiku-5-5", {"type": "disabled", "display": "omitted"}, "không có gì để hiển thị"),
+    ("claude-sonnet-5-5", {"type": "between_tools", "display": "summarized"}, "không nhận trường nào khác"),
+    ("claude-haiku-5-5", {"type": "adaptive", "display": "updates"}, "beta"),
+    ("claude-haiku-5-5", {"type": "adaptive", "display": "full"}, "summarized"),
+    ("claude-haiku-5-5", {"type": "auto"}, "thinking.type"),
+    ("claude-opus-5-5", {"type": "adaptive", "block_binding": {"prefix_mismatch_behavior": "drop_block"}}, "beta"),
+])
+def test_thinking_shape_rules(model, thinking, needle):
+    with pytest.raises(ModelRuleError, match=needle):
+        check_request({"model": model, "messages": [{"role": "user", "content": "x"}], "thinking": thinking})
+
+
+def test_redacted_thinking_must_be_kept_in_tool_loop(tmp_path):
+    s = Settings(model="claude-haiku-5-5", max_tokens=512, mock=True, record=False)
+    c = ClaudeVi(settings=s, client=MockAnthropic(record_dir=tmp_path, redacted=True))
+    first = c.create(messages=[{"role": "user", "content": "x"}], tools=[TOOL])
+    assert [b.type for b in first.content] == ["thinking", "redacted_thinking", "text", "tool_use"]
+    call = first.content[-1]
+    result = {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call.id, "content": "ok"}]}
+    chi_thinking = [b for b in first.content if b.type != "redacted_thinking"]     # lọc theo type == "thinking"
+    with pytest.raises(anthropic.BadRequestError, match="cannot be modified"):
+        c.create(tools=[TOOL], messages=[{"role": "user", "content": "x"},
+                                         {"role": "assistant", "content": chi_thinking}, result])
+    ok = c.create(tools=[TOOL], messages=[{"role": "user", "content": "x"},
+                                          {"role": "assistant", "content": first.content}, result])
+    assert ok.stop_reason == "end_turn"
+    with c.stream(messages=[{"role": "user", "content": "y"}]) as st:
+        assert [b.type for b in st.get_final_message().content][:2] == ["thinking", "redacted_thinking"]
+
+
+def test_summarized_thinking_must_not_be_edited(mock_client):
+    c, _ = mock_client
+    cfg = {"type": "adaptive", "display": "summarized"}
+    first = c.create(messages=[{"role": "user", "content": "x"}], tools=[TOOL], thinking=cfg)
+    sua = [b.model_copy(update={"thinking": "đã sửa"}) if b.type == "thinking" else b for b in first.content]
+    result = {"role": "user", "content": [{"type": "tool_result", "tool_use_id": first.content[-1].id,
+                                           "content": "ok"}]}
+    with pytest.raises(anthropic.BadRequestError, match="cannot be modified"):
+        c.create(tools=[TOOL], thinking=cfg, messages=[{"role": "user", "content": "x"},
+                                                       {"role": "assistant", "content": sua}, result])
+
+
+def _hai_luot(c, system1, system2, them=None):
+    u1 = {"role": "user", "content": "Câu 1"}
+    a1 = c.create(system=system1, messages=[u1])
+    msgs = [u1, {"role": "assistant", "content": a1.content}, {"role": "user", "content": "Câu 2"}, *(them or [])]
+    return c.create(system=system2, messages=msgs)
+
+
+def test_prefix_check_edit_system_is_400(mock_client):
+    c, _ = mock_client
+    with pytest.raises(anthropic.BadRequestError, match="bound to a different conversation.*`system` prompt"):
+        _hai_luot(c, "Trả lời ngắn.", "Trả lời ngắn. Hôm nay là thứ Hai.")
+    assert _hai_luot(c, "Trả lời ngắn.", "Trả lời ngắn.").stop_reason == "end_turn"
+
+
+def test_prefix_check_edit_earlier_message_or_tools(mock_client):
+    c, _ = mock_client
+    u1 = {"role": "user", "content": "Câu 1"}
+    a1 = c.create(messages=[u1])
+    with pytest.raises(anthropic.BadRequestError, match="An earlier message"):
+        c.create(messages=[{"role": "user", "content": "Câu 1 (sửa)"}, {"role": "assistant", "content": a1.content},
+                           {"role": "user", "content": "Câu 2"}])
+    with pytest.raises(anthropic.BadRequestError, match="`tools` list"):
+        c.create(tools=[TOOL], tool_choice={"type": "none"},
+                 messages=[u1, {"role": "assistant", "content": a1.content}, {"role": "user", "content": "Câu 2"}])
+    # bỏ block thinking cũ (không thuộc prefix) thì được
+    bo = [b for b in a1.content if b.type != "thinking"]
+    c.create(messages=[u1, {"role": "assistant", "content": bo}, {"role": "user", "content": "Câu 2"}])
+
+
+def test_mid_conversation_system_keeps_prefix(mock_client):
+    c, _ = mock_client
+    them = [{"role": "system", "content": "Từ giờ trả lời bằng tiếng Anh."}]
+    assert _hai_luot(c, "Trả lời ngắn.", "Trả lời ngắn.", them).stop_reason == "end_turn"
+
+
+@pytest.mark.parametrize("msgs,needle", [
+    ([{"role": "system", "content": "a"}, {"role": "user", "content": "x"}], "không được đứng đầu"),
+    ([{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}, {"role": "system", "content": "a"},
+      {"role": "user", "content": "z"}], "ngay sau một lượt user"),
+    ([{"role": "user", "content": "x"}, {"role": "system", "content": "a"}, {"role": "user", "content": "z"}],
+     "phải là lượt assistant"),
+    ([{"role": "user", "content": "x"}, {"role": "system", "content": [], "output_config": {"effort": "low"}}],
+     "beta"),
+])
+def test_mid_conversation_system_placement(msgs, needle):
+    with pytest.raises(ModelRuleError, match=needle):
+        check_request({"model": "claude-haiku-5-5", "messages": msgs})
+
+
+def test_fable_5_2_rules():
+    base = {"model": "claude-fable-5-2", "messages": [{"role": "user", "content": "x"}]}
+    check_request(base)
+    with pytest.raises(ModelRuleError, match="Không tắt được"):
+        check_request({**base, "thinking": {"type": "disabled"}})
+    with pytest.raises(ModelRuleError, match="tool_choice"):
+        check_request({**base, "tools": [TOOL], "tool_choice": {"type": "any"}})

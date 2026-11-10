@@ -65,7 +65,7 @@ def test_bai1_giu_nguyen_block_thinking():
     ht.gui("Câu 2")
     assistant = mock.da_gui[1]["messages"][1]["content"]
     assert [b.type for b in assistant] == ["thinking", "text"]
-    assert assistant[0].signature == "mock-signature"
+    assert assistant[0].signature.startswith("mock-sig-")      # chữ ký riêng của block mock đã trả
 
 
 # ---------- Bài 2 ----------
