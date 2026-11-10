@@ -15,6 +15,11 @@ EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 # Từ khoá JSON Schema mà structured outputs / strict tool use không hỗ trợ (docs Structured outputs, kiểm 2026-10-24)
 TOOL_NAME = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")  # docs Define tools, kiểm 2026-10-24
 MAX_STRICT_TOOLS = 20
+# Giới hạn độ phức tạp, tính GỘP trên mọi schema strict của một request (docs Structured outputs, kiểm 2026-11-09)
+MAX_OPTIONAL_PARAMS = 24
+MAX_UNION_PARAMS = 16
+# Regex trong "pattern": không hỗ trợ backreference, lookahead/lookbehind, \b \B (docs Structured outputs)
+UNSUPPORTED_REGEX = re.compile(r"\\[1-9]|\(\?<?[=!]|\\[bB]")
 UNSUPPORTED_SCHEMA_KEYS = ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
                            "minLength", "maxLength")
 
@@ -83,10 +88,20 @@ def check_request(params: dict[str, Any]) -> None:
         )
 
     errors += tool_errors(params)
+    errors += complexity_errors(params)
     if fmt is not None and _citations_enabled(params):
         errors.append(
             "Citations và structured outputs không dùng chung được (docs Citations). "
-            "Tách thành hai lời gọi: một lượt lấy trích dẫn, một lượt chuyển sang JSON."
+            "Tách thành hai lời gọi (lượt trích dẫn rồi lượt JSON), hoặc xin mỗi trường một dòng "
+            "\"ten: gia_tri\" có trích dẫn rồi tự tách trong code."
+        )
+    docs = [_field(b, "citations") for m in params.get("messages") or [] for b in _blocks(m)
+            if _field(b, "type") == "document"]
+    bat = [isinstance(c, dict) and bool(c.get("enabled")) for c in docs]
+    if any(bat) and not all(bat):
+        errors.append(
+            f"Citations phải bật cho tất cả hoặc không document nào trong request "
+            f"(đang bật {sum(bat)}/{len(bat)})."
         )
 
     messages = params.get("messages") or []
@@ -113,6 +128,8 @@ def schema_errors(schema: Any, path: str = "schema") -> list[str]:
             errors.append(f"{path}: không hỗ trợ '{key}' — kiểm giá trị trong code sau khi nhận kết quả")
     if schema.get("minItems", 0) > 1:
         errors.append(f"{path}: minItems chỉ được 0 hoặc 1")
+    if isinstance(schema.get("pattern"), str) and UNSUPPORTED_REGEX.search(schema["pattern"]):
+        errors.append(f"{path}: pattern dùng backreference, lookahead/lookbehind hoặc \\b — không được hỗ trợ")
     for name, sub in (schema.get("properties") or {}).items():
         errors += schema_errors(sub, f"{path}.{name}")
     if "items" in schema:
@@ -123,6 +140,57 @@ def schema_errors(schema: Any, path: str = "schema") -> list[str]:
     for key in ("$defs", "definitions"):
         for name, sub in (schema.get(key) or {}).items():
             errors += schema_errors(sub, f"{path}.{key}.{name}")
+    return errors
+
+
+def count_params(schema: Any) -> tuple[int, int]:
+    """(số tham số optional, số tham số dùng union) trong một schema — cách docs tính giới hạn độ phức tạp.
+
+    Optional: thuộc tính không nằm trong `required`. Union: thuộc tính dùng anyOf hoặc mảng type
+    (ví dụ ["string", "null"]). $defs được đếm một lần dù được $ref nhiều chỗ.
+    """
+    if not isinstance(schema, dict):
+        return 0, 0
+    optional = union = 0
+    props = schema.get("properties") or {}
+    required = set(schema.get("required") or [])
+    optional += sum(1 for name in props if name not in required)
+    for sub in props.values():
+        if isinstance(sub, dict) and ("anyOf" in sub or isinstance(sub.get("type"), list)):
+            union += 1
+    children = list(props.values())
+    if isinstance(schema.get("items"), dict):
+        children.append(schema["items"])
+    for key in ("anyOf", "allOf"):
+        children += schema.get(key) or []
+    for key in ("$defs", "definitions"):
+        children += list((schema.get(key) or {}).values())
+    for sub in children:
+        o, u = count_params(sub)
+        optional, union = optional + o, union + u
+    return optional, union
+
+
+def complexity_errors(params: dict[str, Any]) -> list[str]:
+    """Giới hạn gộp trên output_config.format và mọi tool strict trong cùng request."""
+    schemas = []
+    fmt = (params.get("output_config") or {}).get("format") or {}
+    if isinstance(fmt.get("schema"), dict):
+        schemas.append(fmt["schema"])
+    schemas += [t["input_schema"] for t in params.get("tools") or [] if t.get("strict") and "input_schema" in t]
+    if not schemas:
+        return []
+    optional = union = 0
+    for s in schemas:
+        o, u = count_params(s)
+        optional, union = optional + o, union + u
+    errors = []
+    if optional > MAX_OPTIONAL_PARAMS:
+        errors.append(f"Tổng {optional} tham số optional trên các schema strict (tối đa {MAX_OPTIONAL_PARAMS}). "
+                      "Đưa bớt vào required, hoặc tách request.")
+    if union > MAX_UNION_PARAMS:
+        errors.append(f"Tổng {union} tham số dùng anyOf/mảng type trên các schema strict "
+                      f"(tối đa {MAX_UNION_PARAMS}).")
     return errors
 
 

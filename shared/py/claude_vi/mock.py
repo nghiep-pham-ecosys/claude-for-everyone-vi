@@ -142,6 +142,10 @@ def _events(msg: Message) -> Iterator[dict[str, Any]]:
             for j in range(0, len(block.text), 8):
                 yield {"type": "content_block_delta", "index": i,
                        "delta": {"type": "text_delta", "text": block.text[j : j + 8]}}
+            # docs Citations: mỗi citations_delta mang MỘT trích dẫn để nối vào block text hiện tại
+            for cit in block.citations or []:
+                yield {"type": "content_block_delta", "index": i,
+                       "delta": {"type": "citations_delta", "citation": cit.model_dump(mode="json")}}
         elif block.type == "tool_use":
             yield {"type": "content_block_start", "index": i,
                    "content_block": {"type": "tool_use", "id": block.id, "name": block.name, "input": {}}}
@@ -228,6 +232,14 @@ def _citation_payload(params: dict[str, Any]) -> dict[str, Any] | None:
                             "type": "page_location", "cited_text": line.strip(), "document_index": idx,
                             "document_title": title, "start_page_number": page_no,
                             "end_page_number": page_no + 1}]})
+        elif source.get("type") == "content":
+            # Custom content: API không cắt nhỏ thêm, mỗi block là một đơn vị trích dẫn (chỉ số từ 0, end không tính)
+            for j, chunk in enumerate(source.get("content") or []):
+                text = _field(chunk, "text") or ""
+                if len(_SO.findall(text)) >= 2:
+                    blocks.append({"type": "text", "text": text.strip(), "citations": [{
+                        "type": "content_block_location", "cited_text": text, "document_index": idx,
+                        "document_title": title, "start_block_index": j, "end_block_index": j + 1}]})
         elif source.get("type") == "text":
             data = source["data"]
             # câu kết thúc ở dấu chấm theo sau là khoảng trắng hoặc hết chuỗi (không cắt ở "7.1")

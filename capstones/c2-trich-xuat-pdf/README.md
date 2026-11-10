@@ -1,6 +1,6 @@
 # Capstone c2 · Trích xuất số liệu thí nghiệm từ PDF
 
-**Loại:** Build · **Thời lượng:** khoảng 3–4 giờ · **Cần:** module 01–03 · **Chi phí:** $0 ở mock mode; dưới $0,01 mỗi lần chạy thật với `claude-haiku-5-5` trên PDF mẫu 2 trang — ước tính dưới 10.000 token vào và tối đa 2 × 1.024 token ra, cỡ $0,002 (giá kiểm 24/10/2026)
+**Loại:** Build · **Thời lượng:** khoảng 3–4 giờ · **Cần:** module 01–03 và [05](../../modules/05-structured-pdf-citations) · **Chi phí:** $0 ở mock mode; dưới $0,01 mỗi lần chạy thật với `claude-haiku-5-5` trên PDF mẫu 2 trang — ước tính dưới 10.000 token vào và tối đa 2 × 1.024 token ra, cỡ $0,002 (giá kiểm 24/10/2026)
 
 ## Đề bài
 

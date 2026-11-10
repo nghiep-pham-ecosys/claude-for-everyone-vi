@@ -344,3 +344,63 @@ def test_citations_and_structured_outputs_conflict():
                   "type": "object", "properties": {}, "additionalProperties": False}}}}
     with pytest.raises(ModelRuleError, match="không dùng chung"):
         check_request(params)
+
+
+def _text_doc(data, enabled=True):
+    return {"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": data},
+            "citations": {"enabled": enabled}}
+
+
+def test_citations_all_or_none():
+    base = {"model": "claude-haiku-5-5"}
+    mixed = [{"role": "user", "content": [_text_doc("A 1 2."), _text_doc("B 3 4.", enabled=False)]}]
+    with pytest.raises(ModelRuleError, match="tất cả hoặc không"):
+        check_request({**base, "messages": mixed})
+    check_request({**base, "messages": [{"role": "user", "content": [_text_doc("A."), _text_doc("B.")]}]})
+
+
+def test_mock_custom_content_citations(mock_client):
+    c, _ = mock_client
+    doc = {"type": "document", "title": "Nhật ký", "citations": {"enabled": True}, "source": {"type": "content",
+           "content": [{"type": "text", "text": "- Mở máy lúc 8 giờ"}, {"type": "text", "text": "- W1: pH 7,1; DO 6,2"}]}}
+    msg = c.create(messages=[{"role": "user", "content": [doc, {"type": "text", "text": "?"}]}])
+    cit = next(cit for b in msg.content if b.type == "text" for cit in (b.citations or []))
+    assert cit.type == "content_block_location"
+    assert (cit.start_block_index, cit.end_block_index) == (1, 2) and "pH 7,1" in cit.cited_text
+
+
+def test_stream_carries_citations(mock_client):
+    c, _ = mock_client
+    data = "Mẫu W1 có pH 7.1 và DO 6.2 mg/L."
+    with c.stream(messages=[{"role": "user", "content": [_text_doc(data), {"type": "text", "text": "?"}]}]) as s:
+        deltas = [e.delta for e in s if e.type == "content_block_delta" and e.delta.type == "citations_delta"]
+    assert len(deltas) == 1 and deltas[0].citation.cited_text == data
+
+
+def test_schema_complexity_limits():
+    from claude_vi.rules import count_params
+
+    def obj(n_opt, union=False):
+        typ = {"type": ["string", "null"]} if union else {"type": "string"}
+        return {"type": "object", "properties": {f"p{i}": typ for i in range(n_opt)}, "required": [],
+                "additionalProperties": False}
+
+    assert count_params(obj(3, union=True)) == (3, 3)
+    fmt = {"type": "json_schema", "schema": obj(20)}
+    base = {"model": "claude-haiku-5-5", "messages": [{"role": "user", "content": "x"}]}
+    check_request({**base, "output_config": {"format": fmt}})
+    tool = {**TOOL, "input_schema": obj(5)}
+    with pytest.raises(ModelRuleError, match="25 tham số optional"):         # gộp output schema + tool strict
+        check_request({**base, "output_config": {"format": fmt}, "tools": [tool]})
+    check_request({**base, "output_config": {"format": fmt}, "tools": [{**tool, "strict": False}]})
+    with pytest.raises(ModelRuleError, match="17 tham số dùng anyOf"):
+        check_request({**base, "output_config": {"format": {"type": "json_schema", "schema": obj(17, union=True)}}})
+
+
+@pytest.mark.parametrize("pattern,ok", [(r"^\d{4}-\d{2}$", True), (r"^(a)\1$", False),
+                                        (r"^(?=.*\d).+$", False), (r"\bpH\b", False)])
+def test_schema_pattern_support(pattern, ok):
+    from claude_vi.rules import schema_errors
+
+    errs = schema_errors({"type": "string", "pattern": pattern})
+    assert (errs == []) is ok
