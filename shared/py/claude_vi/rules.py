@@ -69,6 +69,7 @@ def check_request(params: dict[str, Any]) -> None:
         errors.append(f'thinking "between_tools" chỉ có trên Sonnet 5.5, không có trên {model}.')
     if thinking.get("type") in ("disabled", "between_tools") and effort in ("xhigh", "max"):
         errors.append(f"effort '{effort}' cần thinking bật. Dùng effort 'high' trở xuống, hoặc bỏ trường thinking.")
+    errors += thinking_errors(thinking)
 
     if effort is not None and effort not in EFFORT_LEVELS:
         hint = ' "adaptive" là chế độ thinking, không phải mức effort.' if effort == "adaptive" else ""
@@ -105,6 +106,7 @@ def check_request(params: dict[str, Any]) -> None:
         )
 
     messages = params.get("messages") or []
+    errors += system_message_errors(messages, model, rules)
     if messages and messages[-1].get("role") == "assistant" and not rules.get("assistant_prefill_allowed", True):
         errors.append(
             f"Prefill tin nhắn assistant không được hỗ trợ trên {model}. "
@@ -140,6 +142,58 @@ def schema_errors(schema: Any, path: str = "schema") -> list[str]:
     for key in ("$defs", "definitions"):
         for name, sub in (schema.get(key) or {}).items():
             errors += schema_errors(sub, f"{path}.{key}.{name}")
+    return errors
+
+
+THINKING_TYPES = ("adaptive", "enabled", "disabled", "between_tools")
+
+
+def thinking_errors(thinking: dict[str, Any]) -> list[str]:
+    """Hình dạng của trường thinking (docs Thinking, kiểm 2026-11-09). Luật theo model nằm ở check_request."""
+    if not thinking:
+        return []
+    kind = thinking.get("type")
+    if kind not in THINKING_TYPES:
+        return [f"thinking.type phải là một trong {', '.join(THINKING_TYPES)}."]
+    errors = []
+    if kind == "between_tools" and set(thinking) - {"type"}:
+        errors.append('thinking "between_tools" không nhận trường nào khác (display, budget_tokens, block_binding).')
+    display = thinking.get("display")
+    if display is not None:
+        if kind in ("disabled", "between_tools"):
+            if kind == "disabled":
+                errors.append('display không dùng được với thinking "disabled": không có gì để hiển thị.')
+        elif display == "updates":
+            errors.append('display "updates" đang beta, cần header thinking-display-updates-2026-08-18; '
+                          "claude_vi không gửi beta header. Dùng \"summarized\" hoặc \"omitted\".")
+        elif display not in ("summarized", "omitted"):
+            errors.append('thinking.display phải là "summarized" hoặc "omitted".')
+    if "block_binding" in thinking:
+        errors.append("thinking.block_binding cần beta header thinking-binding-controls-2026-08-01; "
+                      "claude_vi không gửi beta header. Sửa code cho lịch sử append-only thay vì drop_block.")
+    return errors
+
+
+def system_message_errors(messages: list[dict[str, Any]], model: str, rules: dict[str, Any]) -> list[str]:
+    """Message role "system" giữa hội thoại (docs Mid-conversation system messages, kiểm 2026-11-09)."""
+    errors = []
+    for i, m in enumerate(messages):
+        if m.get("role") != "system":
+            continue
+        if not rules.get("mid_conversation_system_allowed", False):
+            errors.append(f"messages.{i}: {model} không hỗ trợ message role system giữa hội thoại.")
+            continue
+        if "output_config" in m:
+            errors.append(f"messages.{i}.output_config: effort theo từng message đang beta; claude_vi không gửi "
+                          "beta header. Đổi effort ở lượt sau (mất cache), hoặc giữ nguyên.")
+            continue
+        if i == 0:
+            errors.append(f"messages.{i}: message system có nội dung không được đứng đầu; dùng tham số system.")
+        elif messages[i - 1].get("role") != "user":
+            errors.append(f"messages.{i}: message system phải đứng ngay sau một lượt user "
+                          "(kể cả lượt chỉ chứa tool_result).")
+        if i + 1 < len(messages) and messages[i + 1].get("role") != "assistant":
+            errors.append(f"messages.{i}: sau message system phải là lượt assistant, hoặc là cuối danh sách.")
     return errors
 
 

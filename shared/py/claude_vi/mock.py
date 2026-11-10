@@ -18,6 +18,7 @@ import httpx2
 from anthropic.types import Message, RawMessageStreamEvent
 from pydantic import TypeAdapter
 
+from .config import load_models
 from .rules import _blocks, _field, check_request
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -146,6 +147,10 @@ def _events(msg: Message) -> Iterator[dict[str, Any]]:
             for cit in block.citations or []:
                 yield {"type": "content_block_delta", "index": i,
                        "delta": {"type": "citations_delta", "citation": cit.model_dump(mode="json")}}
+        elif block.type == "redacted_thinking":
+            # không có delta: block đến nguyên vẹn trong content_block_start
+            yield {"type": "content_block_start", "index": i,
+                   "content_block": {"type": "redacted_thinking", "data": block.data}}
         elif block.type == "tool_use":
             yield {"type": "content_block_start", "index": i,
                    "content_block": {"type": "tool_use", "id": block.id, "name": block.name, "input": {}}}
@@ -259,18 +264,62 @@ _THINKING_MODIFIED = (
     "messages.{i}.content: `thinking` or `redacted_thinking` blocks in the latest assistant message cannot be "
     "modified. These blocks must remain as they were in the original response."
 )
+# docs Preserved thinking, mục "The 400 error" (kiểm 2026-11-09); câu cuối nói phần nào đã đổi
+_PREFIX_MISMATCH = (
+    "messages.{i}.content.{j}: Invalid `signature` in `thinking` block. The block is bound to a different "
+    "conversation. Remove the block, or set `thinking.block_binding.prefix_mismatch_behavior` to \"drop_block\". "
+    "That setting requires the `thinking-binding-controls-2026-08-01` value in the `anthropic-beta` header. "
+    "{what} differs from when the block was created."
+)
+_THINKING_TYPES = ("thinking", "redacted_thinking")
+_SUMMARY = "[MOCK] Tóm tắt suy nghĩ: đọc câu hỏi, thử một hướng, kiểm lại kết quả."
+
+
+def _norm(x: Any) -> Any:
+    """Dạng JSON ổn định của system/tools/messages, dù block là dict hay object SDK."""
+    if hasattr(x, "model_dump"):
+        x = x.model_dump(mode="json", exclude_none=True)
+    if isinstance(x, dict):
+        return {k: _norm(v) for k, v in x.items() if v is not None}
+    if isinstance(x, (list, tuple)):
+        return [_norm(v) for v in x]
+    return x
+
+
+def _digest(x: Any) -> str:
+    return hashlib.sha256(json.dumps(_norm(x), sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:16]
+
+
+def _prefix(params: dict[str, Any], upto: int) -> tuple[str, str, str]:
+    """(system, tools, messages[:upto]) — phần docs gọi là prefix của một block thinking.
+
+    Block thinking ở các lượt trước KHÔNG thuộc prefix (docs: bỏ block cũ nhất được phép),
+    nên bị loại trước khi băm.
+    """
+    msgs = []
+    for m in (params.get("messages") or [])[:upto]:
+        content = m.get("content")
+        if isinstance(content, list):
+            content = [b for b in content if _field(b, "type") not in _THINKING_TYPES]
+        msgs.append({**m, "content": content})
+    return _digest(params.get("system")), _digest(params.get("tools") or []), _digest(msgs)
 
 
 class _MockMessages:
-    def __init__(self, record_dir: Path | None = None, errors: list[int] | None = None) -> None:
+    def __init__(self, record_dir: Path | None = None, errors: list[int] | None = None,
+                 redacted: bool = False) -> None:
         self._dir = record_dir or FIXTURE_DIR
         self._errors = list(errors or [])
+        self._redacted = redacted
         self._n = 0
-        self._issued: dict[str, str | None] = {}  # tool_use id -> chữ ký block thinking của lượt đó
+        # tool_use id -> các block thinking/redacted của lượt đó: [("thinking", signature) | ("redacted_thinking", data)]
+        self._issued: dict[str, list[tuple[str, str]]] = {}
+        # signature hoặc data -> (text thinking đã trả, prefix lúc tạo block)
+        self._thinking: dict[str, tuple[str, tuple[str, str, str]]] = {}
         self.calls = 0
 
     def _check_thinking_kept(self, params: dict[str, Any]) -> None:
-        """Như API: lượt assistant cuối có tool_use phải giữ nguyên block thinking của nó."""
+        """Như API: lượt assistant cuối có tool_use phải giữ nguyên các block thinking/redacted của nó."""
         messages = params.get("messages") or []
         for i in range(len(messages) - 1, -1, -1):
             if messages[i].get("role") == "assistant":
@@ -279,13 +328,64 @@ class _MockMessages:
             return
         blocks = _blocks(messages[i])
         ids = [_field(b, "id") for b in blocks if _field(b, "type") == "tool_use" and _field(b, "id") in self._issued]
-        signature = self._issued[ids[0]] if ids else None
-        if signature is None:
+        for kind, key in self._issued[ids[0]] if ids else []:
+            if kind == "redacted_thinking":
+                kept = any(_field(b, "type") == kind and _field(b, "data") == key for b in blocks)
+            else:
+                text = self._thinking[key][0]
+                # docs: text đặt vào trường thinking rỗng (display omitted) bị bỏ qua, không bị từ chối
+                kept = any(_field(b, "type") == kind and _field(b, "signature") == key
+                           and (text == "" or _field(b, "thinking") == text) for b in blocks)
+            if not kept:
+                raise _api_error(400, _THINKING_MODIFIED.format(i=i))
+
+    def _check_prefix(self, params: dict[str, Any]) -> None:
+        """Prefix check: block thinking chỉ hợp lệ khi system, tools và các message trước nó không đổi.
+
+        Mock giả định tài khoản tạo từ 31/8/2026 trở đi: lệch prefix là 400 trên mọi model có prefix check.
+        """
+        rules = load_models()["models"][params["model"]].get("rules", {})
+        if not rules.get("prefix_check"):
             return
-        kept = any(_field(b, "type") == "thinking" and _field(b, "signature") == signature
-                   and _field(b, "thinking") == "" for b in blocks)
-        if not kept:
-            raise _api_error(400, _THINKING_MODIFIED.format(i=i))
+        for i, m in enumerate(params.get("messages") or []):
+            if m.get("role") != "assistant":
+                continue
+            for j, b in enumerate(_blocks(m)):
+                kind = _field(b, "type")
+                key = _field(b, "signature" if kind == "thinking" else "data") if kind in _THINKING_TYPES else None
+                if key not in self._thinking:
+                    continue  # block không do mock này tạo (test tự dựng, fixture) -> không kiểm được
+                then, now = self._thinking[key][1], _prefix(params, i)
+                if then != now:
+                    what = ("The `system` prompt" if then[0] != now[0] else
+                            "The `tools` list" if then[1] != now[1] else "An earlier message")
+                    raise _api_error(400, _PREFIX_MISMATCH.format(i=i, j=j, what=what))
+
+    def _finish_thinking(self, payload: dict[str, Any], params: dict[str, Any]) -> None:
+        """Chữ ký riêng cho từng block, text tóm tắt khi display="summarized", tuỳ chọn thêm redacted_thinking."""
+        display = (params.get("thinking") or {}).get("display", "omitted")
+        prefix = _prefix(params, len(params.get("messages") or []))
+        content, made = [], []
+        for b in payload["content"]:
+            if b["type"] != "thinking":
+                content.append(b)
+                continue
+            self._n += 1
+            text = _SUMMARY if display == "summarized" else ""
+            b = {**b, "signature": b["signature"] if b["signature"].startswith("mock-sig-") else f"mock-sig-{self._n}",
+                 "thinking": text}
+            self._thinking[b["signature"]] = (text, prefix)
+            content.append(b)
+            made.append(("thinking", b["signature"]))
+            if self._redacted:
+                data = f"mock-redacted-{self._n}"
+                self._thinking[data] = ("", prefix)
+                content.append({"type": "redacted_thinking", "data": data})
+                made.append(("redacted_thinking", data))
+        payload["content"] = content
+        for b in content:
+            if b["type"] == "tool_use":
+                self._issued[b["id"]] = made
 
     def _tool_payload(self, params: dict[str, Any]) -> dict[str, Any] | None:
         """Có tools: lượt đầu gọi tool, lượt nhận tool_result thì trả lời. None nếu không liên quan tool."""
@@ -310,23 +410,16 @@ class _MockMessages:
         if choice.get("disable_parallel_tool_use") or choice.get("type") == "tool":
             tools = tools[:1]
         forced = choice.get("type") in ("any", "tool")
-        self._n += 1
-        signature = None if forced else f"mock-sig-{self._n}"
         calls = []
         for t in tools:
             self._n += 1
             tool_id = f"toolu_mock_{self._n:03d}"
-            self._issued[tool_id] = signature
             calls.append({"type": "tool_use", "id": tool_id, "name": t["name"], "input": schema_instance(t["input_schema"])})
         if forced:
             # docs: tool_choice any/tool bỏ qua thinking, response bắt đầu bằng tool_use
             payload["content"] = calls
             payload["usage"]["output_tokens_details"] = {"thinking_tokens": 0}
         else:
-            thinking = [{"type": "thinking", "thinking": "", "signature": signature}] if thinking else []
-            if not thinking:
-                for tool_id in (c["id"] for c in calls):
-                    self._issued[tool_id] = None
             payload["content"] = [*thinking, {"type": "text", "text": "[MOCK] Mình sẽ gọi tool."}, *calls]
         payload["stop_reason"] = "tool_use"
         return payload
@@ -337,11 +430,13 @@ class _MockMessages:
             raise _api_error(self._errors.pop(0))
         check_request(params)
         self._check_thinking_kept(params)
+        self._check_prefix(params)
         path = self._dir / f"{request_key(params)}.json"
         if path.exists():
             payload = json.loads(path.read_text("utf-8"))
         else:
             payload = self._tool_payload(params) or _citation_payload(params) or _default_payload(params)
+            self._finish_thinking(payload, params)
         payload.setdefault("model", params["model"])
         return Message.model_validate(payload)
 
@@ -357,7 +452,10 @@ class MockAnthropic:
 
     errors=[529, 429] -> hai lời gọi đầu ném OverloadedError rồi RateLimitError,
     giống SDK thật, để luyện xử lý lỗi mà không cần làm quá tải API.
+    redacted=True     -> sau mỗi block thinking có thêm một block redacted_thinking, như khi API
+                         che một phần suy nghĩ vì lý do an toàn (hiếm gặp, nhưng code phải chịu được).
     """
 
-    def __init__(self, record_dir: Path | None = None, errors: list[int] | None = None) -> None:
-        self.messages = _MockMessages(record_dir, errors)
+    def __init__(self, record_dir: Path | None = None, errors: list[int] | None = None,
+                 redacted: bool = False) -> None:
+        self.messages = _MockMessages(record_dir, errors, redacted)
