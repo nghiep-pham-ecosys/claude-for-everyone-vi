@@ -19,7 +19,7 @@ Có key rồi? Sao chép `.env.example` thành `.env`, điền `ANTHROPIC_API_KE
 | Cấp | Module | Trạng thái |
 |---|---|---|
 | Cơ bản | 00 Cài đặt · 01 Messages API · 02 Prompt engineering | ✅ |
-| Trung cấp | 03 Tool use ✅ · 04 RAG · 05 Structured/PDF/Citations · 06 Chi phí · 07 Thinking | 🚧 |
+| Trung cấp | 03 Tool use ✅ · 04 RAG · 05 Structured/PDF/Citations ✅ · 06 Chi phí · 07 Thinking | 🚧 |
 | Nâng cao | 08 Agents & workflows · 09 Agent SDK · 10 MCP | 📋 |
 | Mở cho cộng đồng | 11 Claude Code · 12 Agent Skills · 13 Evals · 14 Production · 15 Research | 🤝 |
 

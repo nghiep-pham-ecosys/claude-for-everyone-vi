@@ -74,6 +74,8 @@ Cần structured outputs + citations. Dùng PDF mẫu tự tạo hoặc giấy p
 
 ## Bước 6 — Module 05 Structured outputs, PDF, Citations
 
+> ✅ **Xong 09/11/2026** (PR `feat/module-05`), chờ Nghiệp duyệt. 5 script, 3 bài + lời giải + 17 test, `quiz.md` 10 câu, `references.md` (kiểm 09/11). `claude_vi` thêm: citations custom content (`content_block_location`), `citations_delta` khi stream, luật bật citations tất cả-hoặc-không, giới hạn gộp 24 optional / 16 union, chặn regex không hỗ trợ trong `pattern`. Chưa chạy với API thật.
+
 Đặt trước 04 vì mock đã có sẵn (citations, structured outputs, đọc PDF) và capstone c2 đang dùng kiến thức này mà chưa module nào dạy. Theo khuôn module 01.
 
 ## Bước 7 — Module 07 Thinking
