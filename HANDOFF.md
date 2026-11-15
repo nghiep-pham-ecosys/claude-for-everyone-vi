@@ -90,7 +90,9 @@ Prompt caching (mock cần thêm `cache_creation_input_tokens`/`cache_read_input
 
 ## Bước 9 — Module 04 RAG
 
-Chờ Nghiệp chọn: embedding bên ngoài (Voyage, thêm key), BM25/embedding local (không cần key), hay chỉ contextual retrieval trên tập nhỏ.
+> ✅ **Xong 09/11/2026** (PR `feat/module-04`), chờ Nghiệp duyệt. Nghiệp chọn hướng BM25/embedding local. Repo dùng **BM25 thuần Python** (không thêm dependency, CI không tải model), hybrid BM25 có dấu + không dấu ghép bằng RRF; embedding local chỉ mô tả ở mục 7 README, chưa cài và chưa chạy thử. Kho mẫu: 7 trang sổ tay PTN hư cấu (`data/so_tay/`, ghi ở NOTICE.md). 5 script (2 script đầu không gọi API), 3 bài + lời giải + 11 test, quiz 10 câu, references kiểm 09/11. `claude_vi`: mock trả `search_result_location` (top-level và trong `tool_result`), rules chặn `search_result` sai hình dạng/vị trí. Chưa chạy với API thật.
+
+PR #7, #8, #9 đã merge vào `main` ngày 09/11/2026.
 
 ## Việc có hạn
 

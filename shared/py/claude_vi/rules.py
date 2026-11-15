@@ -96,6 +96,7 @@ def check_request(params: dict[str, Any]) -> None:
             "Tách thành hai lời gọi (lượt trích dẫn rồi lượt JSON), hoặc xin mỗi trường một dòng "
             "\"ten: gia_tri\" có trích dẫn rồi tự tách trong code."
         )
+    errors += search_result_errors(params.get("messages") or [])
     docs = [_field(b, "citations") for m in params.get("messages") or [] for b in _blocks(m)
             if _field(b, "type") == "document"]
     bat = [isinstance(c, dict) and bool(c.get("enabled")) for c in docs]
@@ -300,6 +301,40 @@ def tool_errors(params: dict[str, Any]) -> list[str]:
         if extra:
             errors.append(f"messages.{i + 1}: tool_result trỏ tới tool_use_id không có ở lượt trước: "
                           f"{', '.join(sorted(extra))}")
+    return errors
+
+
+def search_result_errors(messages: list[dict[str, Any]]) -> list[str]:
+    """Block search_result (docs Search results, kiểm 2026-11-09)."""
+    errors, found = [], []
+    for i, m in enumerate(messages):
+        for j, b in enumerate(_blocks(m)):
+            kind = _field(b, "type")
+            if kind == "search_result":
+                if m.get("role") != "user":
+                    errors.append(f"messages.{i}.content.{j}: search_result chỉ được đặt trong lượt user.")
+                found.append((f"messages.{i}.content.{j}", b))
+            elif kind == "tool_result" and isinstance(_field(b, "content"), list):
+                inner = _field(b, "content")
+                kinds = {_field(x, "type") for x in inner}
+                if "search_result" in kinds and kinds != {"search_result"}:
+                    errors.append(f"messages.{i}.content.{j}: tool_result có search_result thì mọi block bên "
+                                  "trong phải là search_result; đặt text giải thích vào content của một search_result.")
+                found += [(f"messages.{i}.content.{j}.content.{k}", x) for k, x in enumerate(inner)
+                          if _field(x, "type") == "search_result"]
+    for path, b in found:
+        if not isinstance(_field(b, "source"), str) or not _field(b, "source"):
+            errors.append(f"{path}: search_result cần source (URL hoặc mã ổn định, ví dụ kb://so-tay/3).")
+        if not isinstance(_field(b, "title"), str):
+            errors.append(f"{path}: search_result cần title.")
+        content = _field(b, "content")
+        if not isinstance(content, list) or not content:
+            errors.append(f"{path}: search_result cần content là danh sách block text, không rỗng.")
+        elif any(_field(x, "type") != "text" or not _field(x, "text") for x in content):
+            errors.append(f"{path}: content của search_result chỉ gồm block text có chữ (không ảnh, không rỗng).")
+    bat = [bool((_field(b, "citations") or {}).get("enabled")) for _, b in found]
+    if any(bat) and not all(bat):
+        errors.append(f"Citations của search_result phải bật cho tất cả hoặc không cái nào (đang bật {sum(bat)}/{len(bat)}).")
     return errors
 
 

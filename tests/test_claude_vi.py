@@ -515,3 +515,61 @@ def test_fable_5_2_rules():
         check_request({**base, "thinking": {"type": "disabled"}})
     with pytest.raises(ModelRuleError, match="tool_choice"):
         check_request({**base, "tools": [TOOL], "tool_choice": {"type": "any"}})
+
+
+# ---------- search_result (RAG) ----------
+
+def _sr(source, *texts, enabled=True):
+    return {"type": "search_result", "source": source, "title": source.split("/")[-1],
+            "content": [{"type": "text", "text": t} for t in texts], "citations": {"enabled": enabled}}
+
+
+def test_mock_search_result_citations_top_level(mock_client):
+    c, _ = mock_client
+    msg = c.create(messages=[{"role": "user", "content": [
+        _sr("kb://a", "Máy đo pH hiệu chuẩn mỗi ngày.", "Lỗi E-17 nghĩa là điện cực khô."),
+        _sr("kb://b", "Mẫu nước bảo quản ở 4 °C."),
+        {"type": "text", "text": "Lỗi E-17 là gì?"}]}])
+    cits = [cit for b in msg.content if b.type == "text" for cit in (b.citations or [])]
+    assert cits[0].type == "search_result_location"
+    assert (cits[0].source, cits[0].search_result_index, cits[0].start_block_index, cits[0].end_block_index) == \
+        ("kb://a", 0, 1, 2)
+    assert cits[0].cited_text == "Lỗi E-17 nghĩa là điện cực khô."
+
+
+def test_mock_search_result_from_tool(mock_client):
+    c, _ = mock_client
+    tool = {"name": "tim", "description": "Tìm trong sổ tay.", "input_schema": {
+        "type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"], "additionalProperties": False}}
+    u = {"role": "user", "content": "Bảo quản mẫu nước thế nào?"}
+    first = c.create(messages=[u], tools=[tool])
+    call = first.content[-1]
+    kq = {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call.id, "content": [
+        _sr("kb://a", "Máy đo pH hiệu chuẩn mỗi ngày."), _sr("kb://b", "Mẫu nước bảo quản ở 4 °C.")]}]}
+    final = c.create(messages=[u, {"role": "assistant", "content": first.content}, kq], tools=[tool])
+    cit = next(cit for b in final.content if b.type == "text" for cit in (b.citations or []))
+    assert (cit.source, cit.search_result_index) == ("kb://b", 1)
+
+
+@pytest.mark.parametrize("content,needle", [
+    ([_sr("kb://a", "x"), _sr("kb://b", "y", enabled=False)], "tất cả hoặc không"),
+    ([{**_sr("kb://a", "x"), "source": ""}], "cần source"),
+    ([{**_sr("kb://a", "x"), "content": []}], "không rỗng"),
+    ([_sr("kb://a", "")], "có chữ"),
+])
+def test_search_result_rules(content, needle):
+    with pytest.raises(ModelRuleError, match=needle):
+        check_request({"model": "claude-haiku-5-5", "messages": [{"role": "user", "content": content}]})
+
+
+def test_search_result_rules_in_tool_result_and_assistant():
+    base = {"model": "claude-haiku-5-5"}
+    tu = {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "tim", "input": {}}]}
+    tron = {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": [
+        _sr("kb://a", "x"), {"type": "text", "text": "ghi chú"}]}]}
+    with pytest.raises(ModelRuleError, match="mọi block bên trong"):
+        check_request({**base, "messages": [{"role": "user", "content": "q"}, tu, tron]})
+    with pytest.raises(ModelRuleError, match="chỉ được đặt trong lượt user"):
+        check_request({**base, "messages": [{"role": "user", "content": "q"},
+                                            {"role": "assistant", "content": [_sr("kb://a", "x")]},
+                                            {"role": "user", "content": "tiếp"}]})

@@ -260,6 +260,66 @@ def _citation_payload(params: dict[str, Any]) -> dict[str, Any] | None:
     return payload
 
 
+_TU = re.compile(r"\w+(?:[-.,]\w+)*")
+
+
+def _trung(cau_hoi: set[str], text: str) -> int:
+    """Điểm trùng từ của mock: tổng độ dài các từ chung, nên mã như "e-22" nặng hơn "là"."""
+    chung = cau_hoi & set(_TU.findall(text.lower()))
+    return sum(len(w) * (3 if any(c.isdigit() for c in w) else 1) for w in chung if len(w) >= 2)
+
+
+def search_results(params: dict[str, Any]) -> list[Any]:
+    """Mọi block search_result trong request, đúng thứ tự API đánh search_result_index:
+    theo thứ tự message, kể cả bên trong tool_result."""
+    found = []
+    for m in params.get("messages") or []:
+        for b in _blocks(m):
+            kind = _field(b, "type")
+            if kind == "search_result":
+                found.append(b)
+            elif kind == "tool_result" and isinstance(_field(b, "content"), list):
+                found += [x for x in _field(b, "content") if _field(x, "type") == "search_result"]
+    return found
+
+
+def _search_payload(params: dict[str, Any]) -> dict[str, Any] | None:
+    """search_result có citations.enabled: trích khối khớp nhiều từ nhất với câu hỏi gần nhất.
+
+    Mock không hiểu câu hỏi: nó chỉ đếm từ trùng, để học viên luyện ĐỌC search_result_location.
+    """
+    results = search_results(params)
+    if not any((_field(r, "citations") or {}).get("enabled") for r in results):
+        return None
+    cau_hoi = ""
+    for m in reversed(params.get("messages") or []):
+        texts = [_field(b, "text") for b in _blocks(m) if _field(b, "type") == "text"]
+        if m.get("role") == "user" and (texts or isinstance(m.get("content"), str)):
+            cau_hoi = m["content"] if isinstance(m.get("content"), str) else " ".join(texts)
+            break
+    tu_hoi = set(_TU.findall(cau_hoi.lower()))
+    chon = []
+    for idx, r in enumerate(results):
+        khoi = _field(r, "content") or []
+        diem = [_trung(tu_hoi, _field(k, "text") or "") for k in khoi]
+        if diem and max(diem) > 0:
+            chon.append((max(diem), idx, diem.index(max(diem))))
+    if not chon and results:
+        chon = [(0, 0, 0)]
+    blocks = []
+    for _, idx, j in sorted(chon, key=lambda x: (-x[0], x[1]))[:3]:
+        r = results[idx]
+        text = _field(_field(r, "content")[j], "text")
+        blocks.append({"type": "text", "text": text[:120] + "\n", "citations": [{
+            "type": "search_result_location", "cited_text": text, "source": _field(r, "source"),
+            "title": _field(r, "title"), "search_result_index": idx, "start_block_index": j,
+            "end_block_index": j + 1}]})
+    payload = _default_payload(params)
+    thinking = [b for b in payload["content"] if b["type"] == "thinking"]
+    payload["content"] = [*thinking, {"type": "text", "text": "[MOCK] Theo kết quả tìm kiếm:\n"}, *blocks]
+    return payload
+
+
 _THINKING_MODIFIED = (
     "messages.{i}.content: `thinking` or `redacted_thinking` blocks in the latest assistant message cannot be "
     "modified. These blocks must remain as they were in the original response."
@@ -396,6 +456,8 @@ class _MockMessages:
         payload = _default_payload(params)
         thinking = [b for b in payload["content"] if b["type"] == "thinking"]
         results = [b for b in _blocks(params["messages"][-1]) if _field(b, "type") == "tool_result"]
+        if results and (searched := _search_payload(params)):
+            return searched
         if results:
             parts = []
             for r in results:
@@ -435,7 +497,8 @@ class _MockMessages:
         if path.exists():
             payload = json.loads(path.read_text("utf-8"))
         else:
-            payload = self._tool_payload(params) or _citation_payload(params) or _default_payload(params)
+            payload = (self._tool_payload(params) or _search_payload(params) or _citation_payload(params)
+                       or _default_payload(params))
             self._finish_thinking(payload, params)
         payload.setdefault("model", params["model"])
         return Message.model_validate(payload)
