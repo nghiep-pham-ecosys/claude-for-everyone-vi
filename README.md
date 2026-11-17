@@ -16,12 +16,24 @@ Có key rồi? Sao chép `.env.example` thành `.env`, điền `ANTHROPIC_API_KE
 
 ## Lộ trình
 
+Ký hiệu: ✅ xong · 🚧 đang làm · 📋 đã lên kế hoạch · 🤝 mở cho cộng đồng đóng góp.
+
 | Cấp | Module | Trạng thái |
 |---|---|---|
-| Cơ bản | 00 Cài đặt · 01 Messages API · 02 Prompt engineering | ✅ |
-| Trung cấp | 03 Tool use ✅ · 04 RAG ✅ · 05 Structured/PDF/Citations ✅ · 06 Chi phí 🚧 (phần cơ bản) · 07 Thinking ✅ | 🚧 |
-| Nâng cao | 08 Agents & workflows · 09 Agent SDK · 10 MCP | 📋 |
+| Cơ bản | [00 Cài đặt](modules/00-setup/README.md) | ✅ |
+| Cơ bản | [01 Messages API](modules/01-messages-api/README.md) | ✅ |
+| Cơ bản | [02 Prompt engineering](modules/02-prompt-engineering/README.md) | ✅ |
+| Trung cấp | [03 Tool use](modules/03-tool-use/README.md) | ✅ |
+| Trung cấp | [04 RAG](modules/04-rag/README.md) | ✅ |
+| Trung cấp | [05 Structured outputs, PDF và Citations](modules/05-structured-pdf-citations/README.md) | ✅ |
+| Trung cấp | [06 Chi phí](modules/06-cost/README.md) | 🚧 Xong phần cơ bản. Còn giá cache, đếm token bằng API, Batch API, message threads |
+| Trung cấp | [07 Thinking](modules/07-thinking/README.md) | ✅ |
+| Nâng cao | 08 Agents & workflows | 📋 |
+| Nâng cao | 09 Agent SDK | 📋 |
+| Nâng cao | 10 MCP | 📋 |
 | Mở cho cộng đồng | 11 Claude Code · 12 Agent Skills · 13 Evals · 14 Production · 15 Research | 🤝 |
+
+Thứ tự học gợi ý: 00 → 01 → 02 → 03 → 05 → 07 → 04 → 06. Lý do: module 04 nên học sau 05, module 06 cần module 07 (mục "Cần" ở đầu README mỗi module).
 
 Capstone đầu tiên: [**trích xuất dữ liệu thí nghiệm từ PDF ra JSON có schema, kèm trích dẫn trang gốc**](capstones/c2-trich-xuat-pdf) — citations + structured outputs + kiểm chứng bằng code.
 
