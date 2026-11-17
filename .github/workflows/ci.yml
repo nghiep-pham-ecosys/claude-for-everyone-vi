@@ -7,6 +7,13 @@ on:
   schedule:
     - cron: "0 1 * * 1"   # thứ Hai hằng tuần: bắt model mới bị deprecate
 
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -28,6 +35,31 @@ jobs:
           done
       - name: Capstone chạy được ở mock mode
         run: uv run python capstones/c2-trich-xuat-pdf/pipeline.py
+
+  gitleaks:
+    # Quét secret trên toàn bộ lịch sử. gitleaks lấy từ release tarball, kiểm sha256.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          dir="${RUNNER_TEMP}/gitleaks"
+          mkdir -p "${dir}"
+          curl -fsSL --retry 3 -o "${dir}/${tarball}" "${base}/${tarball}"
+          curl -fsSL --retry 3 -o "${dir}/checksums.txt" "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep -qx "${GITLEAKS_SHA256}  ${tarball}" "${dir}/checksums.txt"
+          echo "${GITLEAKS_SHA256}  ${dir}/${tarball}" | sha256sum -c -
+          tar -xzf "${dir}/${tarball}" -C "${dir}" gitleaks
+          echo "${dir}" >> "${GITHUB_PATH}"
+      - name: Scan full history
+        run: gitleaks git --redact --no-banner -v .
 
   live-smoke:
     # Gọi API thật. Chỉ chạy khi bấm "Run workflow" và được duyệt qua GitHub Environment live-api.
@@ -60,3 +92,28 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync
       - run: uv run python scripts/model_sync.py --issue
+
+  ci-result:
+    # Check duy nhất mà tools/ship/merge đòi (cùng pr-title).
+    # test và gitleaks phải success. live-smoke và model-sync được skip
+    # (chỉ chạy khi dispatch hoặc đang tắt) nhưng không được failure hay cancelled.
+    name: ci-result
+    if: always()
+    needs: [test, gitleaks, live-smoke, model-sync]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job must succeed or be skipped on purpose
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "${NEEDS}" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if ! echo "${NEEDS}" | jq -e '
+            (.test.result == "success")
+            and (.gitleaks.result == "success")
+            and all(.[]; .result == "success" or .result == "skipped")
+          ' > /dev/null; then
+            echo "::error::ci-result fails: test and gitleaks must succeed; no job may fail or be cancelled"
+            exit 1
+          fi

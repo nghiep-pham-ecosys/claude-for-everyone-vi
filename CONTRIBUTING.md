@@ -1,5 +1,7 @@
 # Đóng góp
 
+Sau khi clone, chạy `git config core.hooksPath .githooks` một lần để bật hook pre-push (gitleaks chặn push có secret).
+
 ## Trước khi mở PR
 
 ```bash
