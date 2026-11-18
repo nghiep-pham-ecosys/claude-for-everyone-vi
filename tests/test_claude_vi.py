@@ -573,3 +573,118 @@ def test_search_result_rules_in_tool_result_and_assistant():
         check_request({**base, "messages": [{"role": "user", "content": "q"},
                                             {"role": "assistant", "content": [_sr("kb://a", "x")]},
                                             {"role": "user", "content": "tiếp"}]})
+
+
+# ---------- mock cho module 08 (agent nhiều bước, router, nhiều luồng) ----------
+
+def _agent(c, tools, cau_hoi="AQI và giờ ở Huế?", max_luot=10):
+    """Vòng lặp agent tối thiểu: chạy tới khi hết tool_use, trả (số lượt, các tool đã gọi, message cuối)."""
+    msgs, goi = [{"role": "user", "content": cau_hoi}], []
+    for luot in range(1, max_luot + 1):
+        msg = c.create(messages=msgs, tools=tools)
+        if msg.stop_reason != "tool_use":
+            return luot, goi, msg
+        uses = [b for b in msg.content if b.type == "tool_use"]
+        goi.append([b.name for b in uses])
+        msgs += [{"role": "assistant", "content": msg.content}, {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": b.id, "content": f"kết quả {b.name}"} for b in uses]}]
+    raise AssertionError("agent không dừng")
+
+
+def test_multi_step_calls_one_tool_per_turn(tmp_path):
+    s = Settings(model="claude-haiku-5-5", max_tokens=512, mock=True, record=False)
+    c = ClaudeVi(settings=s, client=MockAnthropic(record_dir=tmp_path, multi_step=True))
+    luot, goi, final = _agent(c, [TOOL, TOOL2])
+    assert goi == [["tra_aqi"], ["tra_gio"]] and luot == 3       # mỗi lượt một tool, theo thứ tự trong tools
+    assert final.stop_reason == "end_turn"
+    assert "kết quả tra_aqi" in text_of(final) and "kết quả tra_gio" in text_of(final)
+
+
+def test_multi_step_off_by_default(mock_client):
+    c, _ = mock_client
+    luot, goi, _final = _agent(c, [TOOL, TOOL2])
+    assert goi == [["tra_aqi", "tra_gio"]] and luot == 2         # hành vi module 03 giữ nguyên
+
+
+def test_multi_step_answers_once_every_tool_has_a_result(tmp_path):
+    s = Settings(model="claude-haiku-5-5", max_tokens=512, mock=True, record=False)
+    c = ClaudeVi(settings=s, client=MockAnthropic(record_dir=tmp_path, multi_step=True))
+    u = {"role": "user", "content": "AQI Hà Nội?"}
+    first = c.create(messages=[u], tools=[TOOL, TOOL2])
+    call = first.content[-1]
+    msgs = [u, {"role": "assistant", "content": first.content}, {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": call.id, "content": "AQI 152"}]}]
+    second = c.create(messages=msgs, tools=[TOOL, TOOL2])
+    assert [b.name for b in second.content if b.type == "tool_use"] == ["tra_gio"]
+    msgs += [{"role": "assistant", "content": second.content}, {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": second.content[-1].id, "content": "10:00"}]}]
+    third = c.create(messages=msgs, tools=[TOOL, TOOL2])
+    msgs += [{"role": "assistant", "content": third.content}, {"role": "user", "content": "Tóm tắt lại giúp mình."}]
+    # Mọi tool đã có kết quả: câu hỏi tiếp theo được trả lời, không gọi lại tool
+    again = c.create(messages=msgs, tools=[TOOL, TOOL2])
+    assert again.stop_reason == "end_turn"
+    assert "AQI 152" in text_of(again) and "10:00" in text_of(again)
+
+
+ROUTER = {"type": "object", "properties": {"nhan": {"type": "string", "enum": ["quy_trinh", "so_lieu", "khac"]}},
+          "required": ["nhan"], "additionalProperties": False}
+
+
+@pytest.mark.parametrize("cau_hoi,nhan", [
+    ("Số liệu cảm biến hôm qua là bao nhiêu?", "so_lieu"),     # có dấu, khác hoa thường, "_" thành khoảng trắng
+    ("Quy trình hiệu chuẩn máy đo pH?", "quy_trinh"),
+    ("Hôm nay trời đẹp không?", "quy_trinh"),                  # không khớp từ khoá nào: phần tử đầu
+    ("Câu này khác hẳn", "khac"),
+    ("Khắc phục lỗi E-17", "khac"),                             # "khắc" bỏ dấu là "khac": mock không hiểu nghĩa
+])
+def test_structured_enum_follows_last_user_turn(mock_client, cau_hoi, nhan):
+    c, _ = mock_client
+    msg = c.ask(cau_hoi, output_config={"format": {"type": "json_schema", "schema": ROUTER}})
+    assert json.loads(text_of(msg))["nhan"] == nhan
+
+
+def test_enum_hint_uses_last_user_text_and_nested_schema(mock_client):
+    c, _ = mock_client
+    schema = {"type": "object", "properties": {"buoc": {"type": "array", "items": {"$ref": "#/$defs/b"}},
+                                               "dat": {"type": "boolean"}},
+              "required": ["buoc", "dat"], "additionalProperties": False,
+              "$defs": {"b": {"type": "object", "properties": {"loai": {"enum": ["doc", "ghi"]}},
+                              "required": ["loai"], "additionalProperties": False}}}
+    msgs = [{"role": "user", "content": "đọc sổ tay"}, {"role": "assistant", "content": "ok"},
+            {"role": "user", "content": [{"type": "text", "text": "giờ ghi nhật ký"}]}]
+    data = json.loads(text_of(c.create(messages=msgs, output_config={"format": {"type": "json_schema",
+                                                                                "schema": schema}})))
+    assert data == {"buoc": [{"loai": "ghi"}], "dat": False}  # boolean vẫn false: evaluator không bao giờ "đạt"
+
+
+def test_tool_input_enum_unchanged(mock_client):
+    c, _ = mock_client
+    msg = c.create(messages=[{"role": "user", "content": "AQI Huế?"}], tools=[TOOL])
+    assert msg.content[-1].input == {"thanh_pho": "Hà Nội"}     # chỉ structured outputs dò từ khoá
+
+
+def test_mock_shared_between_threads(tmp_path):
+    import sys
+    from concurrent.futures import ThreadPoolExecutor
+
+    mock = MockAnthropic(record_dir=tmp_path)
+    s = Settings(model="claude-haiku-5-5", max_tokens=512, mock=True, record=False)
+    c = ClaudeVi(settings=s, client=mock)
+
+    def mot_luot(i):
+        msg = c.create(messages=[{"role": "user", "content": f"câu {i}"}], tools=[TOOL, TOOL2])
+        return [b.id for b in msg.content if b.type == "tool_use"], [b.signature for b in msg.content
+                                                                   if b.type == "thinking"]
+
+    old = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)                                 # đổi luồng thật dày để lộ tranh chấp nếu có
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            ket_qua = list(pool.map(mot_luot, range(200)))
+    finally:
+        sys.setswitchinterval(old)
+    ids = [i for ids, _ in ket_qua for i in ids]
+    sigs = [x for _, sig in ket_qua for x in sig]
+    assert mock.messages.calls == 200
+    assert len(ids) == 400 and len(set(ids)) == 400              # không trùng id tool_use
+    assert len(sigs) == 200 and len(set(sigs)) == 200            # không trùng chữ ký thinking

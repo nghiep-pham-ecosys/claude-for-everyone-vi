@@ -117,6 +117,8 @@ Mọi script và test chạy với `CLAUDE_MOCK=1`, không gọi mạng, không 
 
 Mỗi mục là một thay đổi riêng, có test trong `tests/test_claude_vi.py`, làm trước khi viết script dùng nó.
 
+**Trạng thái (2026-11-18):** mục 1–3 đã có trong `claude_vi` (issue #19). Mục 1 bật bằng `MockAnthropic(multi_step=True)`. Mục 2 chỉ áp cho structured outputs (`output_config.format`): mock bỏ dấu, chữ thường, coi `_` là khoảng trắng rồi dò nguyên từ; input của tool vẫn lấy phần tử đầu. Mục 3 là một khoá quanh mỗi lời gọi.
+
 | # | Thiếu gì | Hệ quả nếu không sửa | Đề xuất |
 |---|---|---|---|
 | 1 | Mock gọi **mọi** tool ở lượt đầu, rồi trả lời ngay khi thấy `tool_result` | Vòng lặp agent luôn dừng sau một vòng tool; không minh hoạ được agent nhiều bước | Chế độ bật bằng tham số (tên chốt khi làm): mỗi lượt gọi **một** tool chưa có kết quả trong lịch sử, theo thứ tự trong `tools`; đủ kết quả thì trả lời. Hành vi suy ra từ request như phần còn lại của mock, không phải fixture viết tay. Mặc định giữ nguyên để test module 03 vẫn xanh |

@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
+import unicodedata
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Self
@@ -37,20 +39,43 @@ def request_key(params: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def schema_instance(schema: Any, root: Any = None) -> Any:
-    """Một giá trị hợp lệ tối thiểu theo JSON schema — mock trả về khi có output_config.format."""
+def _khong_dau(text: str) -> str:
+    """Chữ thường, bỏ dấu tiếng Việt, "_"/"-" thành khoảng trắng: "Quy trình" và "quy_trinh" về cùng một dạng."""
+    text = unicodedata.normalize("NFD", text.lower().replace("đ", "d"))
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+    return re.sub(r"[_\-\s]+", " ", text).strip()
+
+
+def _chon_enum(values: list[Any], hint: str | None) -> Any:
+    """Giá trị enum đầu tiên (theo thứ tự trong schema) có xuất hiện nguyên từ trong `hint`; không có thì phần tử đầu.
+
+    Mock không hiểu câu hỏi: nó chỉ dò từ khoá, để router có thể đi nhánh khác nhánh 1.
+    """
+    if hint:
+        noi = f" {' '.join(_TU.findall(_khong_dau(hint)))} "
+        for v in values:
+            if isinstance(v, str) and (tu := _khong_dau(v)) and f" {tu} " in noi:
+                return v
+    return values[0]
+
+
+def schema_instance(schema: Any, root: Any = None, hint: str | None = None) -> Any:
+    """Một giá trị hợp lệ tối thiểu theo JSON schema — mock trả về khi có output_config.format.
+
+    hint (lượt user cuối): `enum` chọn giá trị có từ khoá xuất hiện trong hint, không có thì phần tử đầu.
+    """
     root = root if root is not None else schema
     if "$ref" in schema:
         name = schema["$ref"].split("/")[-1]
         defs = root.get("$defs") or root.get("definitions") or {}
-        return schema_instance(defs[name], root)
+        return schema_instance(defs[name], root, hint)
     if "const" in schema:
         return schema["const"]
     if "enum" in schema:
-        return schema["enum"][0]
+        return _chon_enum(schema["enum"], hint)
     for key in ("anyOf", "allOf"):
         if key in schema:
-            return schema_instance(schema[key][0], root)
+            return schema_instance(schema[key][0], root, hint)
     kind = schema.get("type")
     if isinstance(kind, list):
         kind = kind[0]
@@ -58,13 +83,26 @@ def schema_instance(schema: Any, root: Any = None) -> Any:
         props = schema.get("properties") or {}
         required = list(schema.get("required") or [])
         order = required + [k for k in props if k not in required]  # API: required trước, optional sau
-        return {k: schema_instance(props[k], root) for k in order}
+        return {k: schema_instance(props[k], root, hint) for k in order}
     if kind == "array":
-        return [schema_instance(schema.get("items") or {}, root)]
+        return [schema_instance(schema.get("items") or {}, root, hint)]
     formats = {"date": "2026-01-01", "date-time": "2026-01-01T00:00:00Z", "email": "mock@example.com",
                "uri": "https://example.com", "uuid": "00000000-0000-0000-0000-000000000000"}
     return {"string": formats.get(schema.get("format"), "[MOCK]"), "integer": 0, "number": 0.0,
             "boolean": False, "null": None}.get(kind, "[MOCK]")
+
+
+def _last_user_text(params: dict[str, Any]) -> str:
+    """Chữ của lượt user gần nhất có chữ (bỏ qua lượt chỉ có tool_result)."""
+    for m in reversed(params.get("messages") or []):
+        if m.get("role") != "user":
+            continue
+        if isinstance(m.get("content"), str):
+            return m["content"]
+        texts = [_field(b, "text") or "" for b in _blocks(m) if _field(b, "type") == "text"]
+        if texts:
+            return " ".join(texts)
+    return ""
 
 
 def _default_payload(params: dict[str, Any]) -> dict[str, Any]:
@@ -79,7 +117,8 @@ def _default_payload(params: dict[str, Any]) -> dict[str, Any]:
     thinking = _THINKING_BY_EFFORT[effort] if thinking_on else 0
 
     fmt = output_config.get("format")
-    text = json.dumps(schema_instance(fmt["schema"]), ensure_ascii=False) if fmt else _DEFAULT_TEXT
+    text = (json.dumps(schema_instance(fmt["schema"], hint=_last_user_text(params)), ensure_ascii=False)
+            if fmt else _DEFAULT_TEXT)
     out, stop = thinking + _TEXT_TOKENS, "end_turn"
     max_tokens = params.get("max_tokens", out)
     if max_tokens < out:
@@ -291,12 +330,7 @@ def _search_payload(params: dict[str, Any]) -> dict[str, Any] | None:
     results = search_results(params)
     if not any((_field(r, "citations") or {}).get("enabled") for r in results):
         return None
-    cau_hoi = ""
-    for m in reversed(params.get("messages") or []):
-        texts = [_field(b, "text") for b in _blocks(m) if _field(b, "type") == "text"]
-        if m.get("role") == "user" and (texts or isinstance(m.get("content"), str)):
-            cau_hoi = m["content"] if isinstance(m.get("content"), str) else " ".join(texts)
-            break
+    cau_hoi = _last_user_text(params)
     tu_hoi = set(_TU.findall(cau_hoi.lower()))
     chon = []
     for idx, r in enumerate(results):
@@ -367,10 +401,13 @@ def _prefix(params: dict[str, Any], upto: int) -> tuple[str, str, str]:
 
 class _MockMessages:
     def __init__(self, record_dir: Path | None = None, errors: list[int] | None = None,
-                 redacted: bool = False) -> None:
+                 redacted: bool = False, multi_step: bool = False) -> None:
         self._dir = record_dir or FIXTURE_DIR
         self._errors = list(errors or [])
         self._redacted = redacted
+        self._multi_step = multi_step
+        # Một khoá cho cả lời gọi: calls, bộ đếm id và bảng chữ ký thinking là trạng thái dùng chung giữa các luồng
+        self._lock = threading.Lock()
         self._n = 0
         # tool_use id -> các block thinking/redacted của lượt đó: [("thinking", signature) | ("redacted_thinking", data)]
         self._issued: dict[str, list[tuple[str, str]]] = {}
@@ -448,7 +485,11 @@ class _MockMessages:
                 self._issued[b["id"]] = made
 
     def _tool_payload(self, params: dict[str, Any]) -> dict[str, Any] | None:
-        """Có tools: lượt đầu gọi tool, lượt nhận tool_result thì trả lời. None nếu không liên quan tool."""
+        """Có tools: lượt đầu gọi tool, lượt nhận tool_result thì trả lời. None nếu không liên quan tool.
+
+        multi_step: mỗi lượt gọi MỘT tool chưa có kết quả trong lịch sử, theo thứ tự trong `tools`;
+        đủ kết quả thì trả lời bằng mọi tool_result trong lịch sử.
+        """
         tools = [t for t in params.get("tools") or [] if "input_schema" in t]
         choice = params.get("tool_choice") or {}
         if not tools or choice.get("type") == "none":
@@ -456,6 +497,20 @@ class _MockMessages:
         payload = _default_payload(params)
         thinking = [b for b in payload["content"] if b["type"] == "thinking"]
         results = [b for b in _blocks(params["messages"][-1]) if _field(b, "type") == "tool_result"]
+        if self._multi_step:
+            called, answered = {}, set()
+            for m in params.get("messages") or []:
+                for b in _blocks(m):
+                    if _field(b, "type") == "tool_use":
+                        called[_field(b, "id")] = _field(b, "name")
+                    elif _field(b, "type") == "tool_result":
+                        answered.add(_field(b, "tool_use_id"))
+            done = {called[i] for i in answered if i in called}
+            todo = [t for t in tools if t["name"] not in done]
+            if todo and choice.get("type") not in ("any", "tool"):
+                return self._call_tools(payload, thinking, todo[:1], forced=False)
+            if not todo:  # đủ kết quả: trả lời bằng mọi tool_result trong lịch sử, kể cả khi lượt cuối là chữ
+                results = [b for m in params["messages"] for b in _blocks(m) if _field(b, "type") == "tool_result"]
         if results and (searched := _search_payload(params)):
             return searched
         if results:
@@ -471,7 +526,11 @@ class _MockMessages:
             tools = [t for t in tools if t["name"] == choice.get("name")]
         if choice.get("disable_parallel_tool_use") or choice.get("type") == "tool":
             tools = tools[:1]
-        forced = choice.get("type") in ("any", "tool")
+        return self._call_tools(payload, thinking, tools, forced=choice.get("type") in ("any", "tool"))
+
+    def _call_tools(self, payload: dict[str, Any], thinking: list[dict[str, Any]], tools: list[dict[str, Any]],
+                    forced: bool) -> dict[str, Any]:
+        """Lượt gọi tool: một block tool_use cho mỗi tool trong `tools`, input tối thiểu theo input_schema."""
         calls = []
         for t in tools:
             self._n += 1
@@ -487,6 +546,10 @@ class _MockMessages:
         return payload
 
     def _respond(self, params: dict[str, Any]) -> Message:
+        with self._lock:
+            return self._respond_locked(params)
+
+    def _respond_locked(self, params: dict[str, Any]) -> Message:
         self.calls += 1
         if self._errors:
             raise _api_error(self._errors.pop(0))
@@ -517,8 +580,12 @@ class MockAnthropic:
     giống SDK thật, để luyện xử lý lỗi mà không cần làm quá tải API.
     redacted=True     -> sau mỗi block thinking có thêm một block redacted_thinking, như khi API
                          che một phần suy nghĩ vì lý do an toàn (hiếm gặp, nhưng code phải chịu được).
+    multi_step=True   -> agent nhiều bước: mỗi lượt gọi MỘT tool chưa có kết quả trong lịch sử (theo thứ tự
+                         trong `tools`), đủ kết quả thì trả lời. Mặc định (False) gọi mọi tool ở lượt đầu.
+
+    Nhiều luồng dùng chung một client được: mỗi lời gọi chạy trong một khoá (các lời gọi nối tiếp nhau).
     """
 
     def __init__(self, record_dir: Path | None = None, errors: list[int] | None = None,
-                 redacted: bool = False) -> None:
-        self.messages = _MockMessages(record_dir, errors, redacted)
+                 redacted: bool = False, multi_step: bool = False) -> None:
+        self.messages = _MockMessages(record_dir, errors, redacted, multi_step)
