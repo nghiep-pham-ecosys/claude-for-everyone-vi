@@ -18,6 +18,7 @@ Repo này **liên kết** tới tài nguyên dưới đây; không sao chép tr�
 |---|---|---|
 | `capstones/c2-trich-xuat-pdf/data/bao_cao_thi_nghiem.pdf` | Repo tự sinh bằng `data/tao_pdf_mau.py` (24/10/2026). Số liệu bịa, không lấy từ tài liệu nào | Nội dung CC BY 4.0, script MIT |
 | `modules/04-rag/data/so_tay/*.md` | Repo tự viết (09/11/2026): sổ tay hư cấu của một phòng thí nghiệm môi trường. Tên máy (MD-300), mã lỗi, mã thiết bị và mọi con số đều bịa; không dùng làm quy trình thật | CC BY 4.0 |
+| `modules/08-agents-workflows/data/99_ghi_chu_ca_dem.md` | Repo tự viết (18/11/2026): trang sổ tay hư cấu có một câu chỉ dẫn chèn vào, để minh hoạ nội dung tool không đáng tin. Mọi con số đều bịa | CC BY 4.0 |
 
 ## Nội dung đã chuyển thể
 

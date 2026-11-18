@@ -1,6 +1,6 @@
 # Đề cương module 08 · Agents và workflows
 
-> **Trạng thái:** đề cương, chờ Nghiệp duyệt. Chưa có code. Khi duyệt xong, nội dung đi vào `modules/08-agents-workflows/` theo khuôn module 01 (xem [CLAUDE.md](../CLAUDE.md), mục "Kiến trúc").
+> **Trạng thái (2026-11-18):** Nghiệp đã duyệt; module đã viết ở [`modules/08-agents-workflows/`](../modules/08-agents-workflows/README.md) (issue #20). Câu hỏi 3–5: giữ tám script, tên thư mục như trên, không có capstone riêng (một capstone agent sau module 10). Đề cương giữ lại làm hồ sơ.
 
 **Loại:** Learn + Build · **Thời lượng dự kiến:** khoảng 3 giờ · **Cần:** module 01–03 và 07; nên học 05 (structured outputs) và 06 (chi phí) · **Chi phí:** $0 ở mock mode. Chi phí chạy thật tính khi viết module, bằng giá trong [`config/models.yaml`](../config/models.yaml), ghi ngày kiểm trong `references.md`.
 
