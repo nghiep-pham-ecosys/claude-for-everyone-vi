@@ -86,6 +86,8 @@ Adaptive thinking, `display: "summarized"`, effort, `between_tools` (Sonnet 5.5)
 
 ## Bước 8 — Module 06 Chi phí
 
+> ✅ **Xong 17/11/2026**, đã merge (PR #16). Script `modules/06-cost/python/01_uoc_tinh_chi_phi.py`, **18 test** trong `tests/test_module06.py` (đếm bằng `CLAUDE_MOCK=1 uv run pytest -q modules/06-cost`, 18/11/2026), `references.md`. Chạy ở chế độ mock; chưa chạy với API thật.
+
 Prompt caching (mock cần thêm `cache_creation_input_tokens`/`cache_read_input_tokens`, `estimate_cost_usd` tính giá cache), token counting, Batch API, message threads (beta 02/11/2026).
 
 ## Bước 9 — Module 04 RAG
