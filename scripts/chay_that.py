@@ -7,8 +7,17 @@
     uv run python scripts/chay_that.py --dong-y --gia-dinh   # kiểm thêm 2 giả định về Haiku 5.5 (HANDOFF "Còn treo")
     uv run python scripts/chay_that.py --dong-y --ghi        # ghi response làm fixture (CLAUDE_RECORD=1)
 
-Không có --dong-y thì script không gửi request nào. Chi phí ước tính của từng module nằm ở
-references.md của module đó; với Haiku 5.5 và MAX_TOKENS=1024, cả repo hiện dưới $0,05.
+Không có --dong-y thì script không gửi request nào.
+
+Chi phí ước tính (cộng lại ngày 18/11/2026). Model: claude-haiku-5-5, giá "from" $0,10 / $0,50 mỗi
+MTok trong config/models.yaml, MAX_TOKENS=1024. Mỗi con số là trường hợp xấu nhất (output + input)
+ghi ở references.md của module, hoặc README của capstone:
+
+    01 $0,003 + 02 $0,004 + 03 $0,007 + 04 $0,005 + 05 $0,005 + 06 $0,001
+    + 07 $0,004 + 08 $0,041 + capstone c2 $0,002 = khoảng $0,072 cho cả repo (dưới $0,10)
+
+Module 00 không gọi API. --gia-dinh thêm 2 lời gọi max_tokens 128, không đáng kể. Đây là ước tính,
+chưa đo bằng API thật. Thêm module mới thì cộng lại con số này.
 """
 from __future__ import annotations
 

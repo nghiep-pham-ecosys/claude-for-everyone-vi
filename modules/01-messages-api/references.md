@@ -26,6 +26,10 @@ Mọi dữ kiện về API, giá và hành vi model trong module này được k
 
 Khớp với `price_per_mtok` trong [`config/models.yaml`](../../config/models.yaml). Giá có thể đổi; kiểm lại trang Pricing trước khi trích dẫn.
 
+## Chi phí ước tính
+
+5 script, 7 lời gọi tới model mặc định khi chạy thật (01: 1; 02: 2; 03: 2, một lời gọi có `max_tokens` 10; 04: 1; 05: 1). Lời gọi Opus 5.5 ở script 05 bị chặn tại máy; lỗi 529/429 ở script 05 chỉ giả lập ở mock mode. Output trường hợp xấu nhất với Haiku 5.5 và `MAX_TOKENS=1024`: 6 × 1.024 × $0,50/MTok ≈ $0,003; input không đáng kể. Cả module dưới $0,01. Đây là ước tính (thêm 18/11/2026 từ giá ở bảng trên), chưa đo bằng API thật.
+
 ## Ghi chú khi kiểm
 
 - Docs nhắc API version `2026-10-21` (từ version này, gửi `temperature`/`top_p`/`top_k` với **bất kỳ** giá trị nào cũng lỗi). SDK 1.17.0 vẫn gửi header `anthropic-version: 2023-06-01`; module này không đổi version.

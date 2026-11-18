@@ -94,6 +94,12 @@ Prompt caching (mock cần thêm `cache_creation_input_tokens`/`cache_read_input
 
 PR #7, #8, #9 đã merge vào `main` ngày 09/11/2026.
 
+## Module 08 Agents và workflows
+
+> ✅ **Xong 18/11/2026**, đã merge: mock mở rộng (PR #21), module (PR #22). Đề cương ở `docs/de-cuong-module-08.md`. 8 script trong `modules/08-agents-workflows/python/` (`01_mot_loi_goi` → `08_duyet_va_trace`) cùng `phong_thi_nghiem.py` (tool dùng chung, `tao_client()`), 3 bài + lời giải + **31 test** trong `tests/test_module08.py` (đếm bằng `CLAUDE_MOCK=1 uv run pytest -q modules/08-agents-workflows`, 18/11/2026), `quiz.md` 10 câu, `references.md` (kiểm 18/11), dữ liệu hư cấu `data/99_ghi_chu_ca_dem.md`. `claude_vi`: `MockAnthropic(multi_step=True)` gọi lần lượt từng tool chưa có kết quả. Chi phí ước tính khi chạy thật dưới $0,05 (khoảng $0,041). Chưa chạy với API thật.
+>
+> Còn lại: chưa kiểm docs SDK về dùng chung một client giữa nhiều luồng (script 04 dùng một client mỗi nhánh); context editing và server-side compaction chỉ giới thiệu, `claude_vi` chưa hỗ trợ; module 09 (Agent SDK) và capstone agent (sau module 10) chưa có.
+
 ## Việc có hạn
 
 - **Sau 30/11/2026:** Sonnet 4.5 retire. Đổi `status: retired` cho model này trong `config/models.yaml`.
