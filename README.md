@@ -26,7 +26,7 @@ Ký hiệu: ✅ xong · 🚧 đang làm · 📋 đã lên kế hoạch · 🤝 m
 | Trung cấp | [03 Tool use](modules/03-tool-use/README.md) | ✅ |
 | Trung cấp | [04 RAG](modules/04-rag/README.md) | ✅ |
 | Trung cấp | [05 Structured outputs, PDF và Citations](modules/05-structured-pdf-citations/README.md) | ✅ |
-| Trung cấp | [06 Chi phí](modules/06-cost/README.md) | 🚧 Xong phần cơ bản. Còn giá cache, đếm token bằng API, Batch API, message threads |
+| Trung cấp | [06 Chi phí](modules/06-cost/README.md) | ✅ |
 | Trung cấp | [07 Thinking](modules/07-thinking/README.md) | ✅ |
 | Nâng cao | [08 Agents & workflows](modules/08-agents-workflows/README.md) | ✅ |
 | Nâng cao | 09 Agent SDK | 📋 |

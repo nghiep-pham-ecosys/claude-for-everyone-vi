@@ -5,10 +5,10 @@ import json
 import os
 from typing import Any
 
-from anthropic.types import Message
+from anthropic.types import Message, MessageTokensCount
 
 from .config import REPO_ROOT, Settings
-from .mock import FIXTURE_DIR, MockAnthropic, request_key
+from .mock import BETA_THREADS, FIXTURE_DIR, MockAnthropic, request_key
 from .rules import check_request
 
 
@@ -46,6 +46,11 @@ class ClaudeVi:
                 )
             self._client = Anthropic()
 
+    @property
+    def mock(self) -> MockAnthropic | None:
+        """Client mock đang dùng (để giả lập hết hạn cache/thread trong bài học), None khi gọi API thật."""
+        return self._client if isinstance(self._client, MockAnthropic) else None
+
     def _prepare(self, params: dict[str, Any]) -> dict[str, Any]:
         params.setdefault("model", self.settings.model)
         params.setdefault("max_tokens", self.settings.max_tokens)
@@ -58,6 +63,23 @@ class ClaudeVi:
         return params
 
     def create(self, **params: Any) -> Message:
+        """thread={"type": "create"} hoặc {"type": "continue", "previous_message_id": ...}: message threads (beta).
+
+        Request continue chỉ có message mới nên không kiểm luật ở đây được: tự giữ bản sao cả hội thoại và kiểm
+        bằng check_request (module 06, mục 8). SDK 1.17.0 chưa có tham số thread, nên gửi qua extra_body.
+        """
+        thread = params.pop("thread", None)
+        if thread is not None:
+            if thread.get("type") == "continue":
+                params.setdefault("model", self.settings.model)
+                params.setdefault("max_tokens", self.settings.max_tokens)
+            else:
+                params = self._prepare(params)
+            headers = dict(params.pop("extra_headers", None) or {})
+            betas = [b for b in headers.get("anthropic-beta", "").split(",") if b.strip()]
+            headers["anthropic-beta"] = ",".join([*betas, BETA_THREADS])
+            body = {**(params.pop("extra_body", None) or {}), "thread": thread}
+            return self._client.messages.create(**params, extra_body=body, extra_headers=headers)
         params = self._prepare(params)
         msg = self._client.messages.create(**params)
         if self.settings.record and not self.settings.mock:
@@ -79,6 +101,28 @@ class ClaudeVi:
         """
         return self._client.messages.stream(**self._prepare(params))
 
+    def count_tokens(self, **params: Any) -> MessageTokensCount:
+        """POST /v1/messages/count_tokens: miễn phí, không tạo message, không dùng cache. Không nhận max_tokens."""
+        params.setdefault("model", self.settings.model)
+        check_request(params)
+        return self._client.messages.count_tokens(**params)
+
+    def batch_create(self, requests: list[dict[str, Any]]) -> Any:
+        """Message Batches: mỗi phần tử {"custom_id": ..., "params": {...}}. Kiểm luật từng request TRƯỚC khi gửi,
+        vì API chỉ báo lỗi params khi cả batch đã xong (docs Batch processing)."""
+        reqs = [{"custom_id": r["custom_id"], "params": self._prepare(dict(r["params"]))} for r in requests]
+        return self._client.messages.batches.create(requests=reqs)
+
+    def batch_retrieve(self, batch_id: str) -> Any:
+        return self._client.messages.batches.retrieve(batch_id)
+
+    def batch_results(self, batch_id: str) -> Any:
+        """Iterator các MessageBatchIndividualResponse. Thứ tự KHÔNG theo request: ghép bằng custom_id."""
+        return self._client.messages.batches.results(batch_id)
+
+    def batch_cancel(self, batch_id: str) -> Any:
+        return self._client.messages.batches.cancel(batch_id)
+
     def ask(self, prompt: str, system: str | None = None, **params: Any) -> Message:
         if system:
             params["system"] = system
@@ -93,11 +137,29 @@ def text_of(msg: Message) -> str:
     return "".join(b.text for b in msg.content if b.type == "text")
 
 
-def estimate_cost_usd(msg: Message) -> float:
+def estimate_cost_usd(msg: Message, batch: bool = False) -> float:
+    """Chi phí ước tính từ usage và giá trong config/models.yaml (module 06).
+
+    Tính: input, output (gồm thinking), ghi cache 5 phút / 1 giờ, đọc cache, giá prompt dài (khi model có
+    long_context, prompt tính cả token cache), batch=True nhân batch_price_multiplier. Chưa tính: inference_geo,
+    fast mode, server tool. Model chưa có giá, hoặc có token cache mà chưa có giá cache: trả nan.
+    """
     from .config import load_models
 
-    price = load_models()["models"].get(msg.model, {}).get("price_per_mtok")
+    cfg = load_models()
+    entry = cfg["models"].get(msg.model, {})
+    price, cache = entry.get("price_per_mtok"), entry.get("cache_price_per_mtok")
     if not price:
         return float("nan")
     u = msg.usage
-    return (u.input_tokens * price["input"] + u.output_tokens * price["output"]) / 1_000_000
+    read, created = u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0
+    w1h = u.cache_creation.ephemeral_1h_input_tokens if u.cache_creation else 0
+    long = entry.get("long_context")
+    if long and u.input_tokens + read + created > long["over_tokens"]:
+        price, cache = long["price_per_mtok"], long.get("cache_price_per_mtok", cache)
+    if (read or created) and not cache:
+        return float("nan")
+    cost = u.input_tokens * price["input"] + u.output_tokens * price["output"]
+    if cache:
+        cost += (created - w1h) * cache["write_5m"] + w1h * cache["write_1h"] + read * cache["read"]
+    return cost / 1_000_000 * (cfg.get("batch_price_multiplier", 1.0) if batch else 1.0)

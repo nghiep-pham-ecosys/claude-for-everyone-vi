@@ -11,8 +11,16 @@
 #
 # rules: các ràng buộc mà mock mode của claude_vi kiểm tra giống API thật.
 # default_effort: mức effort khi không truyền output_config.effort (mock dùng để mô phỏng token thinking).
+# cache_price_per_mtok: giá ghi cache 5 phút / 1 giờ và giá đọc cache (USD / MTok). Ghi = 1,25x / 2x giá input;
+#   đọc khác nhau theo model (0,025x Fable 5.1 / 5.2, 0,05x Opus 5.5 / Sonnet 5.5, 0,1x model khác).
+#   Nguồn: https://platform.claude.com/docs/en/about-claude/pricing#model-pricing (kiểm 2026-11-25)
+# cache_min_tokens: prompt ngắn hơn số này thì không được cache, không báo lỗi (docs Prompt caching, kiểm 2026-11-25).
 
 default_model: claude-haiku-5-5
+
+# Batch API: 50% giá chuẩn cho input và output; nhân chồng với giá cache (docs Pricing "Batch processing",
+# "How do discounts stack", kiểm 2026-11-25)
+batch_price_multiplier: 0.5
 
 models:
   claude-fable-5-2:
@@ -20,6 +28,8 @@ models:
     # Luật: https://platform.claude.com/docs/en/models/fable-5-2/migration-guide (kiểm 2026-11-09)
     status: active
     price_per_mtok: { input: 8.0, output: 40.0 }
+    cache_price_per_mtok: { write_5m: 10.0, write_1h: 16.0, read: 0.20 }
+    cache_min_tokens: 512
     rules:
       thinking_disabled_allowed: false # adaptive thinking luôn bật
       forced_tool_choice_allowed: false # any/tool -> 400, kể cả token counting
@@ -34,6 +44,8 @@ models:
   claude-fable-5-1:
     status: active
     price_per_mtok: { input: 10.0, output: 50.0 }
+    cache_price_per_mtok: { write_5m: 12.50, write_1h: 20.0, read: 0.25 }
+    cache_min_tokens: 512
     rules:
       thinking_disabled_allowed: false
       forced_tool_choice_allowed: false # tool_choice any/tool -> 400 (release notes 2026-09-01)
@@ -48,6 +60,8 @@ models:
   claude-opus-5-5:
     status: active
     price_per_mtok: { input: 4.0, output: 20.0 }
+    cache_price_per_mtok: { write_5m: 5.0, write_1h: 8.0, read: 0.20 }
+    cache_min_tokens: 512
     rules:
       thinking_disabled_allowed: false # 2026-09-22
       forced_tool_choice_allowed: false # 2026-09-22
@@ -62,6 +76,8 @@ models:
   claude-sonnet-5-5:
     status: active
     price_per_mtok: { input: 2.0, output: 10.0 }
+    cache_price_per_mtok: { write_5m: 2.50, write_1h: 4.0, read: 0.10 }
+    cache_min_tokens: 512
     rules:
       thinking_disabled_allowed: false # dùng {"type": "between_tools"} thay thế (2026-09-28)
       forced_tool_choice_allowed: false # 2026-09-28
@@ -75,7 +91,15 @@ models:
 
   claude-haiku-5-5:
     status: active
-    price_per_mtok: { input: 0.10, output: 0.50 } # "from" – giá thấp nhất, xem trang Pricing
+    price_per_mtok: { input: 0.10, output: 0.50 } # prompt tới 100.000 token; dài hơn xem long_context (Pricing, kiểm 2026-11-25)
+    cache_price_per_mtok: { write_5m: 0.125, write_1h: 0.20, read: 0.01 }
+    cache_min_tokens: 512
+    # Prompt trên 100.000 token (tính cả token đọc/ghi cache): MỌI loại token theo giá dưới đây (docs Pricing,
+    # "Long context pricing", kiểm 2026-11-25)
+    long_context:
+      over_tokens: 100000
+      price_per_mtok: { input: 0.50, output: 2.50 }
+      cache_price_per_mtok: { write_5m: 0.625, write_1h: 1.0, read: 0.05 }
     rules:
       thinking_disabled_allowed: true # docs Thinking: nhận "disabled" ở effort high trở xuống (kiểm 2026-10-24)
       forced_tool_choice_allowed: true # docs Define tools: Haiku 5.5 nhận any/tool, khi đó bỏ thinking (kiểm 2026-10-24)

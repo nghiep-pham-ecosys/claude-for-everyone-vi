@@ -17,7 +17,8 @@ from typing import Any, Self
 
 import anthropic
 import httpx2
-from anthropic.types import Message, RawMessageStreamEvent
+from anthropic.types import Message, MessageTokensCount, RawMessageStreamEvent
+from anthropic.types.messages import MessageBatch, MessageBatchIndividualResponse
 from pydantic import TypeAdapter
 
 from .config import load_models
@@ -30,6 +31,47 @@ _DEFAULT_TEXT = "[MOCK] Xin chào! Đây là phản hồi giả lập."
 _TEXT_TOKENS = 12
 # Token thinking giả lập theo effort: đủ để thấy effort là "núm vặn" chi phí, không phải số thật
 _THINKING_BY_EFFORT = {"low": 2, "medium": 6, "high": 12, "xhigh": 20, "max": 30}
+
+
+# Mock đếm token theo quy ước 1 token ≈ 4 ký tự của dạng JSON từng block. KHÔNG phải tokenizer thật:
+# đủ để thấy prompt dài thì tốn hơn và cache tính trên phần nào, không dùng để so với số thật.
+_KY_TU_MOI_TOKEN = 4
+BETA_THREADS = "message-threads-2026-08-12"  # docs Message threads (kiểm 2026-11-25)
+_CUSTOM_ID = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")  # docs Batch processing (kiểm 2026-11-25)
+_MAX_BATCH_REQUESTS = 100_000
+
+
+def _bo_cache_control(x: Any) -> Any:
+    x = _norm(x)
+    return {k: v for k, v in x.items() if k != "cache_control"} if isinstance(x, dict) else x
+
+
+def segments(params: dict[str, Any]) -> list[tuple[str, int, Any]]:
+    """Prompt chia thành block theo thứ tự prefix của API: tools -> system -> messages.
+
+    Mỗi phần tử: (text JSON của block, số token giả lập, cache_control của block hoặc None). cache_control
+    không thuộc nội dung: đổi chỗ breakpoint không đổi prefix.
+    """
+    blocks: list[Any] = list(params.get("tools") or [])
+    system = params.get("system")
+    if isinstance(system, str):
+        blocks.append({"type": "text", "text": system})
+    elif system:
+        blocks += list(system)
+    for m in params.get("messages") or []:
+        content = m.get("content")
+        parts = [{"type": "text", "text": content}] if isinstance(content, str) else list(content or [])
+        blocks += [{"role": m.get("role"), **_norm(b)} for b in parts]
+    out = []
+    for b in blocks:
+        text = json.dumps(_bo_cache_control(b), sort_keys=True, ensure_ascii=False)
+        out.append((text, -(-len(text) // _KY_TU_MOI_TOKEN), _field(b, "cache_control")))
+    return out
+
+
+def dem_token(params: dict[str, Any]) -> int:
+    """Tổng token input giả lập của một request: cùng con số mà count_tokens của mock trả về."""
+    return sum(n for _, n, _ in segments(params))
 
 
 def request_key(params: dict[str, Any]) -> str:
@@ -136,17 +178,18 @@ def _default_payload(params: dict[str, Any]) -> dict[str, Any]:
         "stop_reason": stop,
         "stop_sequence": None,
         "usage": {
-            "input_tokens": 12,
+            "input_tokens": dem_token(params),
             "output_tokens": out,
             "output_tokens_details": {"thinking_tokens": min(out, thinking)},
         },
     }
 
 
-def _api_error(status: int, message: str | None = None) -> anthropic.APIStatusError:
-    """Dựng đúng exception mà SDK ném khi API trả mã lỗi `status`."""
+def _api_error(status: int, message: str | None = None, error_code: str | None = None) -> anthropic.APIStatusError:
+    """Dựng đúng exception mà SDK ném khi API trả mã lỗi `status`. error_code -> error.details.error_code."""
     kinds = {
         400: (anthropic.BadRequestError, "invalid_request_error"),
+        404: (anthropic.NotFoundError, "not_found_error"),
         429: (anthropic.RateLimitError, "rate_limit_error"),
         500: (anthropic.InternalServerError, "api_error"),
         529: (anthropic.OverloadedError, "overloaded_error"),
@@ -154,6 +197,8 @@ def _api_error(status: int, message: str | None = None) -> anthropic.APIStatusEr
     cls, err_type = kinds[status]
     body = {"type": "error", "error": {"type": err_type, "message": message or f"[MOCK] lỗi {status}"},
             "request_id": "req_mock"}
+    if error_code:
+        body["error"]["details"] = {"error_code": error_code}
     headers = {"request-id": "req_mock"}
     if status == 429:
         headers["retry-after"] = "1"
@@ -394,7 +439,8 @@ def _prefix(params: dict[str, Any], upto: int) -> tuple[str, str, str]:
     for m in (params.get("messages") or [])[:upto]:
         content = m.get("content")
         if isinstance(content, list):
-            content = [b for b in content if _field(b, "type") not in _THINKING_TYPES]
+            # cache_control không thuộc nội dung: đặt hay bỏ breakpoint không làm đổi prefix
+            content = [_bo_cache_control(b) for b in content if _field(b, "type") not in _THINKING_TYPES]
         msgs.append({**m, "content": content})
     return _digest(params.get("system")), _digest(params.get("tools") or []), _digest(msgs)
 
@@ -413,7 +459,92 @@ class _MockMessages:
         self._issued: dict[str, list[tuple[str, str]]] = {}
         # signature hoặc data -> (text thinking đã trả, prefix lúc tạo block)
         self._thinking: dict[str, tuple[str, tuple[str, str, str]]] = {}
+        # Prompt cache: khoá prefix -> ttl. Mock không có đồng hồ: cache không hết hạn trong một client
+        # (gọi xoa_cache() để giả lập hết hạn).
+        self._cache: dict[str, str] = {}
+        # Message threads: id response -> {"params": hội thoại đầy đủ, "fixed": các trường cố định, "da_noi": bool}
+        self._threads: dict[str, dict[str, Any]] = {}
         self.calls = 0
+        self.count_calls = 0
+        self.batches = _MockBatches(self)
+
+    def xoa_cache(self) -> None:
+        """Giả lập cache hết hạn (API thật: 5 phút hoặc 1 giờ không dùng tới)."""
+        self._cache.clear()
+
+    def het_han_threads(self) -> None:
+        """Giả lập thread hết hạn (API thật: 5 phút sau request cuối): continue tiếp theo nhận 404."""
+        self._threads.clear()
+
+    def _cache_usage(self, params: dict[str, Any]) -> dict[str, Any]:
+        """usage của phần input khi có prompt caching, theo docs Prompt caching (kiểm 2026-11-25):
+
+        - Prefix theo thứ tự tools -> system -> messages; mỗi breakpoint dò ngược tối đa 20 block tìm prefix đã
+          có trong cache (đọc). Chỉ GHI ở breakpoint, và chỉ khi prefix dài ít nhất cache_min_tokens của model.
+        - input_tokens chỉ là phần SAU chỗ đọc/ghi cuối; tổng input = đọc + ghi + input_tokens.
+        - Đổi model, thinking, effort (khác mặc định) hoặc tool_choice thì khoá khác: mất cache.
+        - Trộn TTL: đọc trúng mục 5 phút nhưng một breakpoint 1 giờ phía sau trượt thì không tính là đọc.
+
+        Khác API thật (đơn giản hoá): đổi effort/thinking làm mất cả prefix (API: chắc chắn mất phần messages,
+        tuỳ model mất cả tools/system); thêm ảnh không làm mất cache; khi dò ngược, chuỗi tool_use/tool_result
+        liền nhau vẫn đếm từng block (API đếm là một vị trí); cache không hết hạn theo thời gian.
+        """
+        segs = segments(params)
+        total = sum(n for _, n, _ in segs)
+        usage = {"input_tokens": total, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+                 "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0}}
+        entry = load_models()["models"][params["model"]]
+        minimum = entry.get("cache_min_tokens")
+        bps = {i: cc for i, (_, _, cc) in enumerate(segs) if cc}
+        if params.get("cache_control") and params.get("messages"):
+            bps[len(segs) - 1] = params["cache_control"]  # automatic caching: block cuối của messages
+        if not bps or minimum is None:
+            return usage
+        effort = (params.get("output_config") or {}).get("effort") or entry.get("default_effort")
+        seed = [params["model"], _norm(params.get("thinking")), effort, _norm(params.get("tool_choice"))]
+        h = hashlib.sha256(json.dumps(seed, sort_keys=True).encode())
+        keys, cum, run = [], [], 0
+        for text, n, _ in segs:
+            h.update(text.encode())
+            keys.append(h.hexdigest())
+            run += n
+            cum.append(run)
+        read, read_ttl, hit = 0, None, -1
+        for b in bps:
+            for p in range(b, max(-1, b - 20), -1):
+                if keys[p] in self._cache:
+                    if cum[p] > read:
+                        read, read_ttl, hit = cum[p], self._cache[keys[p]], p
+                    break
+        if read_ttl == "5m" and any(b > hit and bps[b].get("ttl") == "1h" and keys[b] not in self._cache
+                                    for b in bps):
+            read = 0  # docs "Mixing different TTLs": mục 5 phút không được tính khi breakpoint 1 giờ sau nó trượt
+        prev = read
+        for b in sorted(bps):
+            if cum[b] < minimum:
+                continue  # quá ngắn: không cache, không báo lỗi
+            ttl = bps[b].get("ttl", "5m")
+            if cum[b] > prev:
+                usage["cache_creation"][f"ephemeral_{ttl}_input_tokens"] += cum[b] - prev
+                prev = cum[b]
+            self._cache[keys[b]] = ttl
+        created = sum(usage["cache_creation"].values())
+        usage.update(input_tokens=total - read - created, cache_creation_input_tokens=created,
+                     cache_read_input_tokens=read)
+        return usage
+
+    def count_tokens(self, **params: Any) -> MessageTokensCount:
+        """Như POST /v1/messages/count_tokens: không tạo message, không dùng cache, cùng luật 400 với create."""
+        with self._lock:
+            self.count_calls += 1
+            if "thread" in (params.pop("extra_body", None) or {}):
+                raise _api_error(400, "thread: token counting không hỗ trợ message threads. Đếm cả hội thoại.",
+                                 "thread_unsupported_request")
+            params.pop("extra_headers", None)
+            if "max_tokens" in params:
+                raise TypeError("count_tokens() không nhận max_tokens")  # giống SDK: không có tham số này
+            check_request(params)
+            return MessageTokensCount(input_tokens=dem_token(params))
 
     def _check_thinking_kept(self, params: dict[str, Any]) -> None:
         """Như API: lượt assistant cuối có tool_use phải giữ nguyên các block thinking/redacted của nó."""
@@ -549,7 +680,7 @@ class _MockMessages:
         with self._lock:
             return self._respond_locked(params)
 
-    def _respond_locked(self, params: dict[str, Any]) -> Message:
+    def _respond_locked(self, params: dict[str, Any], cache_view: dict[str, Any] | None = None) -> Message:
         self.calls += 1
         if self._errors:
             raise _api_error(self._errors.pop(0))
@@ -563,14 +694,174 @@ class _MockMessages:
             payload = (self._tool_payload(params) or _search_payload(params) or _citation_payload(params)
                        or _default_payload(params))
             self._finish_thinking(payload, params)
+            payload["usage"].update(self._cache_usage(cache_view or params))
         payload.setdefault("model", params["model"])
         return Message.model_validate(payload)
 
     def create(self, **params: Any) -> Message:
-        return self._respond(params)
+        thread = (params.pop("extra_body", None) or {}).get("thread")
+        headers = params.pop("extra_headers", None) or {}
+        if thread is None:
+            return self._respond(params)
+        with self._lock:
+            return self._respond_thread(params, thread, headers)
 
     def stream(self, **params: Any) -> MockMessageStream:
+        if (params.pop("extra_body", None) or {}).get("thread"):
+            raise NotImplementedError("Mock chưa hỗ trợ stream trong message thread")
+        params.pop("extra_headers", None)
         return MockMessageStream(self._respond(params))
+
+    # Trường phải giữ nguyên suốt một thread (docs Message threads, "What to send", kiểm 2026-11-25)
+    _THREAD_FIXED = ("model", "tool_choice", "thinking", "mcp_servers", "context_management", "output_config",
+                     "cache_control")
+
+    def _respond_thread(self, params: dict[str, Any], thread: dict[str, Any], headers: dict[str, str]) -> Message:
+        """Message threads (beta): create lưu hội thoại theo id response; continue chỉ gửi message mới.
+
+        Mock dựng lại hội thoại đầy đủ rồi trả lời như request thường, nên usage.input_tokens tính trên cả
+        hội thoại. Docs chỉ nói "Threads do not change pricing"; con số này là suy luận của repo.
+        """
+        if BETA_THREADS not in headers.get("anthropic-beta", ""):
+            raise _api_error(400, f"thread: cần header anthropic-beta: {BETA_THREADS}")
+        fixed = {k: _norm(params.get(k)) for k in self._THREAD_FIXED}
+        kind = thread.get("type")
+        if kind == "create":
+            full = params
+        elif kind == "continue":
+            if not thread.get("previous_message_id"):
+                raise _api_error(400, "thread.previous_message_id: bắt buộc khi type là continue.")
+            prev = self._threads.get(thread.get("previous_message_id"))
+            if prev is None:
+                raise _api_error(404, "thread: không tiếp tục được thread này. Gửi lại cả hội thoại.",
+                                 "thread_not_found")
+            if prev["da_noi"]:
+                raise _api_error(400, "thread: mỗi id response chỉ tiếp tục được một lần.",
+                                 "thread_already_continued")
+            if "system" in params or "tools" in params:
+                raise _api_error(400, "thread: system và tools chỉ gửi ở request create.")
+            khac = [k for k in self._THREAD_FIXED if fixed[k] != prev["fixed"][k]]
+            if khac:
+                raise _api_error(400, f"thread: trường cố định khác lúc create: {', '.join(khac)}",
+                                 "thread_fingerprint_mismatch")
+            moi = list(params.get("messages") or [])
+            full = {**prev["params"], **params, "messages": prev["params"]["messages"] + moi}
+            # Breakpoint trên message đã lưu vẫn dùng để đọc cache nhưng không tính vào giới hạn 4: luật kiểm
+            # trên bản bỏ chúng đi, cache tính trên bản giữ nguyên.
+            cu = [{**m, "content": [_bo_cache_control(b) for b in m["content"]]} if isinstance(m["content"], list)
+                  else m for m in prev["params"]["messages"]]
+            msg = self._respond_locked({**full, "messages": cu + moi}, cache_view=full)
+            prev["da_noi"] = True  # chỉ khi request thành công: lỗi trước khi model chạy không đổi thread
+        else:
+            raise _api_error(400, 'thread.type phải là "create" hoặc "continue".')
+        if kind == "create":
+            msg = self._respond_locked(full)
+        self._n += 1
+        msg = msg.model_copy(update={"id": f"msg_mock_thread_{self._n:03d}"})
+        luu = {k: v for k, v in full.items() if k not in ("max_tokens", "stop_sequences", "metadata")}
+        luu["messages"] = [*full["messages"], {"role": "assistant", "content": [_norm(b) for b in msg.content]}]
+        self._threads[msg.id] = {"params": luu, "fixed": fixed, "da_noi": False}
+        return msg
+
+
+class _MockBatches:
+    """Giống client.messages.batches ở phần bài học dùng tới: create, retrieve, results, cancel.
+
+    Xử lý theo thứ tự, ngay trong lời gọi retrieve thứ `xong_sau_lan`, nên cache luôn trúng (API thật:
+    cache trong batch chỉ "best-effort"). Kết quả trả theo thứ tự NGƯỢC request: luôn ghép bằng custom_id.
+    """
+
+    xong_sau_lan = 2  # số lần retrieve trước khi batch "ended"
+
+    def __init__(self, messages: _MockMessages) -> None:
+        self._m = messages
+        self._data: dict[str, dict[str, Any]] = {}
+        # Khoá riêng: _process gọi _respond, hàm đó lấy khoá của _MockMessages
+        self._lock = threading.Lock()
+
+    def create(self, *, requests: list[dict[str, Any]], **_: Any) -> MessageBatch:
+        with self._lock:
+            return self._create(list(requests))
+
+    def _create(self, requests: list[dict[str, Any]]) -> MessageBatch:
+        if not 1 <= len(requests) <= _MAX_BATCH_REQUESTS:
+            raise _api_error(400, f"requests: cần từ 1 tới {_MAX_BATCH_REQUESTS:,} request.")
+        ids = [r.get("custom_id") for r in requests]
+        sai = [i for i in ids if not isinstance(i, str) or not _CUSTOM_ID.fullmatch(i)]
+        if sai:
+            raise _api_error(400, f"custom_id phải khớp ^[a-zA-Z0-9_-]{{1,64}}$: {sai[:3]}")
+        if len(set(ids)) != len(ids):
+            raise _api_error(400, "custom_id phải khác nhau trong một batch.")
+        batch_id = f"msgbatch_mock_{len(self._data) + 1:03d}"
+        self._data[batch_id] = {"requests": json.loads(json.dumps(requests, default=_norm)), "lan": 0,
+                                "huy": False, "ket_qua": None}
+        return self._batch(batch_id)
+
+    def _process(self, d: dict[str, Any]) -> None:
+        out = []
+        for r in d["requests"]:
+            params = dict(r["params"])
+            if d["huy"]:
+                result = {"type": "canceled"}
+            else:
+                loi = ("stream" if params.get("stream") else "max_tokens: 0" if params.get("max_tokens") == 0
+                       else "thread" if "thread" in params else None)
+                try:
+                    if loi:  # docs: các tham số này không dùng được trong batch
+                        raise _api_error(400, f"{loi}: không hỗ trợ trong Message Batches.")
+                    result = {"type": "succeeded", "message": self._m._respond(params).model_dump(mode="json")}
+                except (anthropic.APIStatusError, ValueError) as e:
+                    loi = (e.body["error"] if isinstance(e, anthropic.APIStatusError)
+                           else {"type": "invalid_request_error", "message": str(e)})
+                    result = {"type": "errored", "error": {"type": "error", "error": {
+                        "type": loi["type"], "message": loi["message"]}}}
+            out.append({"custom_id": r["custom_id"], "result": result})
+        d["ket_qua"] = out
+
+    def _batch(self, batch_id: str) -> MessageBatch:
+        d = self._data[batch_id]
+        xong = d["ket_qua"] is not None
+        dem = {"processing": 0 if xong else len(d["requests"]), "succeeded": 0, "errored": 0, "canceled": 0,
+               "expired": 0}
+        for r in d["ket_qua"] or []:
+            dem[r["result"]["type"]] += 1
+        status = "ended" if xong else "canceling" if d["huy"] else "in_progress"
+        return MessageBatch.model_validate({
+            "id": batch_id, "type": "message_batch", "processing_status": status, "request_counts": dem,
+            "created_at": "2026-01-01T00:00:00Z", "expires_at": "2026-01-02T00:00:00Z",
+            "ended_at": "2026-01-01T00:10:00Z" if xong else None, "archived_at": None,
+            "cancel_initiated_at": "2026-01-01T00:01:00Z" if d["huy"] else None,
+            "results_url": f"https://api.anthropic.com/v1/messages/batches/{batch_id}/results" if xong else None,
+        })
+
+    def retrieve(self, message_batch_id: str, **_: Any) -> MessageBatch:
+        with self._lock:
+            d = self._data.get(message_batch_id)
+            if d is None:
+                raise _api_error(404, f"Không có batch {message_batch_id}")
+            d["lan"] += 1
+            if d["ket_qua"] is None and (d["huy"] or d["lan"] >= self.xong_sau_lan):
+                self._process(d)
+            return self._batch(message_batch_id)
+
+    def cancel(self, message_batch_id: str, **_: Any) -> MessageBatch:
+        with self._lock:
+            d = self._data[message_batch_id]
+            if d["ket_qua"] is None:
+                d["huy"] = True
+            return self._batch(message_batch_id)
+
+    def results(self, message_batch_id: str, **_: Any) -> Iterator[MessageBatchIndividualResponse]:
+        with self._lock:
+            return self._results(message_batch_id)
+
+    def _results(self, message_batch_id: str) -> Iterator[MessageBatchIndividualResponse]:
+        d = self._data[message_batch_id]
+        if d["ket_qua"] is None:
+            # Giống SDK: results() đọc results_url, chưa "ended" thì chưa có
+            raise anthropic.AnthropicError(f"No `results_url` for the given batch; Has it finished processing? "
+                                           f"{self._batch(message_batch_id).processing_status}")
+        return iter([MessageBatchIndividualResponse.model_validate(r) for r in reversed(d["ket_qua"])])
 
 
 class MockAnthropic:
