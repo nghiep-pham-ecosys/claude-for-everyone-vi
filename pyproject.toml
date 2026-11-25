@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
     "anthropic>=1.17,<2",   # 1.x đã bỏ temperature/top_p/top_k; đọc MIGRATION.md trước khi nâng major
+    "mcp>=2.3,<3",
     "pydantic>=2",          # bài học dùng trực tiếp (module 05); anthropic đã kéo theo
     "pypdf>=5",
     "python-dotenv>=1.0",
