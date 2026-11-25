@@ -2,7 +2,7 @@
 
 Lộ trình học **không chính thức**, tiếng Việt, về nền tảng Claude (API → agent). Code MIT, nội dung CC BY 4.0. Chủ dự án: Nghiệp (GitHub `pqnghiep1354`). Kế hoạch việc cần làm nằm ở [HANDOFF.md](HANDOFF.md).
 
-Trang theo dõi cho Nghiệp: [Notion — Claude for Everyone (vi) Hub](https://github.com/nghiep-pham-ecosys). Repo là bản chuẩn; không đọc Notion để lấy luật. Xong mỗi bước trong HANDOFF.md thì tick checkbox tương ứng ở mục "Tiến độ" trên trang đó (nếu có Notion connector), không sửa phần khác.
+Theo dõi tiến độ: issue và board của org trên GitHub.
 
 ## Lệnh
 
@@ -25,7 +25,7 @@ Cả 4 lệnh phải xanh trước mỗi commit.
 5. **Không sao chép** `anthropics/courses` (CC BY-NC 4.0, archived) hay `prompt-eng-interactive-tutorial` (không có giấy phép). Chỉ liên kết. Tự viết nội dung tiếng Việt. Xem `NOTICE.md`.
 6. **Dữ kiện về sản phẩm/giá/model phải kiểm từ nguồn hiện tại** (platform.claude.com/docs, release notes) và ghi ngày kiểm trong `references.md` của module. Không viết con số chưa xác minh (ví dụ số khoá Academy).
 7. **Capstone khoa học:** không đề bài về tổng hợp chất nguy hiểm, mầm bệnh, vũ khí.
-8. Repo để **Private** tới khi xong MVP. Không đổi sang Public, không xoá lịch sử, không force-push `main` nếu chưa hỏi.
+8. Repo **Public** từ 25/11/2026 (Nghiệp duyệt). Không xoá lịch sử, không force-push `main` nếu chưa hỏi.
 9. Chữ "Claude" trong tên repo: README phải luôn giữ dòng "không chính thức, không được Anthropic bảo trợ". Không dùng logo Claude/Anthropic.
 
 ## Kiến trúc
