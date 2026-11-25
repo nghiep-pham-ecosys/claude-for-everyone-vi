@@ -29,11 +29,11 @@ Ký hiệu: ✅ xong · 🚧 đang làm · 📋 đã lên kế hoạch · 🤝 m
 | Trung cấp | [06 Chi phí](modules/06-cost/README.md) | ✅ |
 | Trung cấp | [07 Thinking](modules/07-thinking/README.md) | ✅ |
 | Nâng cao | [08 Agents & workflows](modules/08-agents-workflows/README.md) | ✅ |
-| Nâng cao | 09 Agent SDK | 📋 |
+| Nâng cao | [09 Agent SDK](modules/09-agent-sdk/README.md) | ✅ |
 | Nâng cao | 10 MCP | 📋 |
 | Mở cho cộng đồng | 11 Claude Code · 12 Agent Skills · 13 Evals · 14 Production · 15 Research | 🤝 |
 
-Thứ tự học gợi ý: 00 → 01 → 02 → 03 → 05 → 07 → 04 → 06 → 08. Lý do: module 04 nên học sau 05, module 06 cần module 07, module 08 cần 03 và 07 (mục "Cần" ở đầu README mỗi module).
+Thứ tự học gợi ý: 00 → 01 → 02 → 03 → 05 → 07 → 04 → 06 → 08 → 09. Lý do: module 04 nên học sau 05, module 06 cần module 07, module 08 cần 03 và 07, module 09 cần 08 (mục "Cần" ở đầu README mỗi module).
 
 Capstone đầu tiên: [**trích xuất dữ liệu thí nghiệm từ PDF ra JSON có schema, kèm trích dẫn trang gốc**](capstones/c2-trich-xuat-pdf) — citations + structured outputs + kiểm chứng bằng code.
 
