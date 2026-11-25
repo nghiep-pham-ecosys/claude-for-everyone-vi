@@ -31,8 +31,8 @@ def tach_chi_phi(msg) -> dict:
     """Tách chi phí của một response theo từng phần của usage.
 
     thinking nằm TRONG output (đã tính ở "output"), tách riêng chỉ để thấy nó tốn bao nhiêu.
-    cache_*: estimate_cost_usd chưa tính, vì config chưa có giá cache. Trả về số token để bạn biết
-    ước tính đang thiếu phần nào.
+    token_cache: số token ghi + đọc cache. Phần này có giá riêng, script 02 tách chi tiết; ở đây chỉ báo
+    để bạn biết "tong" (input + output) chưa gồm nó.
     """
     p = gia(msg.model)
     u = msg.usage
@@ -40,7 +40,7 @@ def tach_chi_phi(msg) -> dict:
     cache = (u.cache_creation_input_tokens or 0) + (u.cache_read_input_tokens or 0)
     if not p:
         nan = float("nan")
-        return {"input": nan, "output": nan, "thinking": nan, "tong": nan, "token_cache_chua_tinh": cache}
+        return {"input": nan, "output": nan, "thinking": nan, "tong": nan, "token_cache": cache}
     vao = u.input_tokens * p["input"] / MTOK
     ra = u.output_tokens * p["output"] / MTOK
     return {
@@ -48,7 +48,7 @@ def tach_chi_phi(msg) -> dict:
         "output": ra,
         "thinking": thinking * p["output"] / MTOK,
         "tong": vao + ra,
-        "token_cache_chua_tinh": cache,
+        "token_cache": cache,
     }
 
 
@@ -66,7 +66,7 @@ def main() -> None:
         print(f"   {m:<20}{p['input']:>8}{p['output']:>8}{'$' + format(tran_chi_phi_output(m, max_tokens), '.6f'):>14}")
 
     print(f"\n2) Trước khi gọi {model}: output tốn tối đa ${tran_chi_phi_output(model, max_tokens):.6f}.")
-    print("   Input chưa biết trước: cần đếm token (module 06, phần sau) hoặc đo từ một lần gọi giống hệt.")
+    print("   Input chưa biết trước: đếm bằng client.count_tokens(...) (script 03) hoặc đo từ một lần gọi giống hệt.")
 
     print("\n3) Sau khi gọi: đọc usage, tách chi phí")
     cau_hoi = "Giải thích ngắn vì sao nên đo chi phí trên chính bài toán của mình."
@@ -76,11 +76,11 @@ def main() -> None:
         print(f"   effort={effort:<5} {u.input_tokens} vào / {u.output_tokens} ra"
               f" | input ${c['input']:.8f} + output ${c['output']:.8f} (thinking ${c['thinking']:.8f})"
               f" = ${c['tong']:.8f} | estimate_cost_usd ${estimate_cost_usd(msg):.8f}")
-        if c["token_cache_chua_tinh"]:
-            print(f"   {c['token_cache_chua_tinh']} token cache CHƯA được tính: ước tính đang thấp hơn thực tế.")
+        if c["token_cache"]:
+            print(f"   {c['token_cache']} token cache có giá riêng, chưa nằm trong 'tong' (xem script 02).")
 
-    print("\n4) Cache: usage còn có cache_creation_input_tokens, cache_read_input_tokens."
-          "\n   Mock chưa điền hai trường này; config chưa có giá cache nên estimate_cost_usd bỏ qua chúng.")
+    print("\n4) Cache: usage còn có cache_creation_input_tokens, cache_read_input_tokens. Request này không đặt"
+          "\n   cache_control nên cả hai bằng 0. Script 02 bật prompt caching và tính giá cache.")
 
 
 if __name__ == "__main__":

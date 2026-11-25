@@ -114,6 +114,8 @@ def check_request(params: dict[str, Any]) -> None:
             "Dùng structured outputs (output_config.format) để ép định dạng."
         )
 
+    errors += cache_control_errors(params)
+
     if errors:
         raise ModelRuleError("Request sẽ lỗi 400:\n- " + "\n- ".join(errors))
 
@@ -246,6 +248,55 @@ def complexity_errors(params: dict[str, Any]) -> list[str]:
     if union > MAX_UNION_PARAMS:
         errors.append(f"Tổng {union} tham số dùng anyOf/mảng type trên các schema strict "
                       f"(tối đa {MAX_UNION_PARAMS}).")
+    return errors
+
+
+MAX_CACHE_BREAKPOINTS = 4  # docs Prompt caching, FAQ (kiểm 2026-11-25)
+CACHE_TTLS = ("5m", "1h")
+
+
+def cache_breakpoints(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """Mọi cache_control trong request, theo thứ tự prefix tools -> system -> messages, rồi tới cache_control
+    cấp cao nhất (automatic caching, đặt lên block cuối của messages). Mỗi phần tử: (vị trí, cache_control)."""
+    found = []
+    for i, t in enumerate(params.get("tools") or []):
+        if _field(t, "cache_control"):
+            found.append((f"tools.{i}", _field(t, "cache_control")))
+    system = params.get("system")
+    for i, b in enumerate(system if isinstance(system, list) else []):
+        if _field(b, "cache_control"):
+            found.append((f"system.{i}", _field(b, "cache_control")))
+    for i, m in enumerate(params.get("messages") or []):
+        for j, b in enumerate(_blocks(m)):
+            if _field(b, "cache_control"):
+                found.append((f"messages.{i}.content.{j}", _field(b, "cache_control")))
+    if params.get("cache_control"):
+        found.append(("cache_control", params["cache_control"]))
+    return found
+
+
+def cache_control_errors(params: dict[str, Any]) -> list[str]:
+    """cache_control sai hình dạng, quá 4 breakpoint, hoặc TTL 1 giờ đứng sau TTL 5 phút (docs Prompt caching,
+    kiểm 2026-11-25). Automatic caching (cache_control cấp cao nhất) chiếm một trong 4 chỗ."""
+    found = cache_breakpoints(params)
+    errors = []
+    for where, cc in found:
+        if not isinstance(cc, dict) or cc.get("type") != "ephemeral":
+            errors.append(f'{where}: cache_control phải là {{"type": "ephemeral"}} (kèm "ttl" nếu muốn).')
+        elif cc.get("ttl", "5m") not in CACHE_TTLS:
+            errors.append(f'{where}: cache_control.ttl phải là "5m" hoặc "1h".')
+    if len(found) > MAX_CACHE_BREAKPOINTS:
+        errors.append(f"Tối đa {MAX_CACHE_BREAKPOINTS} cache breakpoint mỗi request (đang có {len(found)}, "
+                      "cache_control cấp cao nhất cũng tính là một).")
+    top, msgs = params.get("cache_control"), params.get("messages") or []
+    cuoi = _blocks(msgs[-1])[-1:] if msgs else []
+    if isinstance(top, dict) and cuoi and isinstance(_field(cuoi[0], "cache_control"), dict) \
+            and _field(cuoi[0], "cache_control").get("ttl", "5m") != top.get("ttl", "5m"):
+        errors.append("cache_control cấp cao nhất có ttl khác với cache_control trên block cuối của messages.")
+    ttls = [cc.get("ttl", "5m") for _, cc in found if isinstance(cc, dict)]
+    if "5m" in ttls and "1h" in ttls[ttls.index("5m"):]:
+        errors.append('Breakpoint ttl "1h" phải đứng trước mọi breakpoint ttl "5m" (theo thứ tự tools -> system '
+                      "-> messages).")
     return errors
 
 
