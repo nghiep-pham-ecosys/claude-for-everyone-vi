@@ -13,7 +13,7 @@ Dựng thử trên máy: `uv run python scripts/build_site.py --out _site`, rồ
 ## Bắt đầu trong 5 phút (không cần API key)
 
 ```bash
-git clone <repo> && cd claude-for-everyone-vi
+git clone https://github.com/nghiep-pham-ecosys/claude-for-everyone-vi.git && cd claude-for-everyone-vi
 uv sync
 CLAUDE_MOCK=1 uv run python modules/01-messages-api/python/01_hello.py
 ```
@@ -37,7 +37,7 @@ Ký hiệu: ✅ xong · 🚧 đang làm · 📋 đã lên kế hoạch · 🤝 m
 | Nâng cao | [08 Agents & workflows](modules/08-agents-workflows/README.md) | ✅ |
 | Nâng cao | [09 Agent SDK](modules/09-agent-sdk/README.md) | ✅ |
 | Nâng cao | [10 MCP](modules/10-mcp/README.md) | ✅ |
-| Mở cho cộng đồng | 11 Claude Code · 12 Agent Skills · 13 Evals · 14 Production · 15 Research | 🤝 |
+| Mở cho cộng đồng | 11 Claude Code · 12 Agent Skills · 13 Evals · 14 Production · 15 Research | 🤝 [nhận việc](#đóng-góp) |
 
 Thứ tự học gợi ý: 00 → 01 → 02 → 03 → 05 → 07 → 04 → 06 → 08 → 09 → 10. Lý do: module 04 nên học sau 05, module 06 cần module 07, module 08 cần 03 và 07, module 09 cần 08, module 10 cần 09 (mục "Cần" ở đầu README mỗi module).
 
@@ -52,6 +52,15 @@ Capstone đầu tiên: [**trích xuất dữ liệu thí nghiệm từ PDF ra JS
 ## Chi phí
 
 Mặc định `claude-haiku-5-5`, `MAX_TOKENS=1024`. Mỗi README module ghi chi phí ước tính. Hàm `estimate_cost_usd(msg)` tính từ `usage` thật.
+
+## Đóng góp
+
+Repo mở cho mọi người. Bạn không cần API key: mọi thứ chạy ở mock mode.
+
+- Đọc [CONTRIBUTING.md](CONTRIBUTING.md): quy trình fork hoặc nhánh, tên PR, 4 lệnh chạy trên máy, ai review và merge, giấy phép của phần đóng góp.
+- Chọn việc đầu tiên trong các issue [`good first issue`](https://github.com/nghiep-pham-ecosys/claude-for-everyone-vi/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). Mỗi module 11-15 bắt đầu bằng một đề cương.
+- Hỏi đáp, góp ý, khoe bài làm: [Discussions](https://github.com/nghiep-pham-ecosys/claude-for-everyone-vi/discussions).
+- Thay đổi theo từng phiên bản: [CHANGELOG.md](CHANGELOG.md).
 
 ## Giấy phép
 

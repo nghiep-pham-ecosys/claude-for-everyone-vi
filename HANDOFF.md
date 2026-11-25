@@ -108,6 +108,12 @@ PR #7, #8, #9 đã merge vào `main` ngày 09/11/2026.
 >
 > Còn lại: bật Pages (Settings → Pages → Source: GitHub Actions) trước lần merge đầu; mỗi video đăng xong thì điền link vào `videos.yaml`. Module mới phải thêm một mục vào `videos.yaml` (thiếu thì build báo lỗi).
 
+## Mở repo cho người đóng góp
+
+> 🚧 **25/11/2026** (issue #6, nhánh `chore/6-contributors`). `CONTRIBUTING.md` viết lại với quy trình review (fork hoặc nhánh, tên PR, 4 lệnh, chỉ mock mode, ai review và merge, giấy phép của phần đóng góp). Thêm form issue tiếng Việt (`.github/ISSUE_TEMPLATE/`: báo lỗi, đề xuất nội dung, việc), template PR, `CHANGELOG.md` có mục 0.1.0, mục "Đóng góp" trong README.
+>
+> Còn lại (chủ dự án làm trên GitHub): bật Discussions; tạo label; mở 5 issue `good first issue` cho đề cương module 11-15; merge PR rồi tag và phát hành `v0.1.0` từ `CHANGELOG.md`. Form issue của repo thay hẳn form mặc định của org: mở issue việc bằng form "Việc".
+
 ## Việc có hạn
 
 - **Sau 30/11/2026:** Sonnet 4.5 retire. Đổi `status: retired` cho model này trong `config/models.yaml`.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Hỏi đáp và ý tưởng
+    url: https://github.com/nghiep-pham-ecosys/claude-for-everyone-vi/discussions
+    about: Câu hỏi khi học, ý tưởng chưa thành việc cụ thể. Hỏi ở Discussions.
+  - name: Báo lỗ hổng bảo mật hoặc secret bị lộ
+    url: https://github.com/nghiep-pham-ecosys/claude-for-everyone-vi/security/advisories/new
+    about: Báo riêng, không mở issue công khai.

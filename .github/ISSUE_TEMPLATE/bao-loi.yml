@@ -1,0 +1,46 @@
+name: Báo lỗi
+description: Script chạy lỗi, test đỏ, giải thích sai, link hỏng hoặc dữ kiện đã cũ.
+title: "fix: <mô tả ngắn>"
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã báo lỗi. Repo chạy ở mock mode (`CLAUDE_MOCK=1`): đừng dán API key, file `.env` hay token vào issue.
+        Secret bị lộ hoặc lỗ hổng bảo mật: báo riêng qua tab **Security**, không mở issue công khai.
+  - type: input
+    id: where
+    attributes:
+      label: Ở đâu
+      description: File hoặc trang bị lỗi.
+      placeholder: modules/03-tool-use/python/02_vong_lap.py
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Lỗi là gì. Với lỗi chạy code, dán lệnh đã chạy và output (bỏ mọi thông tin cá nhân).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Mong đợi
+      description: Đúng ra phải thế nào. Nếu là dữ kiện đã cũ, dán link docs chính thức chứng minh.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Môi trường
+      description: Hệ điều hành, phiên bản Python, `uv --version`.
+      placeholder: Ubuntu 24.04, Python 3.12, uv 0.9
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Đã kiểm
+      options:
+        - label: Tôi đã chạy lại với `CLAUDE_MOCK=1` trên `main` mới nhất.
+        - label: Issue này không chứa API key, token hay thông tin cá nhân.
+          required: true
