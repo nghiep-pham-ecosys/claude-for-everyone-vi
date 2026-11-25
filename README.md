@@ -1,5 +1,7 @@
 # Claude for Everyone (vi)
 
+**Tiếng Việt** · [English](en/README.md)
+
 > Lộ trình học **không chính thức**, bằng tiếng Việt, về nền tảng Claude của Anthropic — từ gọi API đầu tiên tới agent đa tác tử.
 >
 > Dự án cộng đồng, **không liên kết và không được Anthropic bảo trợ**. "Claude" và "Anthropic" là thương hiệu của Anthropic PBC.
