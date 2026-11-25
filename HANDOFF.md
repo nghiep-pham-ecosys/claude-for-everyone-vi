@@ -114,6 +114,17 @@ PR #7, #8, #9 đã merge vào `main` ngày 09/11/2026.
 >
 > Còn lại (chủ dự án làm trên GitHub): bật Discussions; tạo label; mở 5 issue `good first issue` cho đề cương module 11-15; merge PR rồi tag và phát hành `v0.1.0` từ `CHANGELOG.md`. Form issue của repo thay hẳn form mặc định của org: mở issue việc bằng form "Việc".
 
+## Bản tiếng Anh (`en/`)
+
+> 🚧 **25/11/2026** (issue #4, nhánh `feat/4-english-edition`). Xong module **00–04**: `en/README.md` (công tắc ngôn ngữ, dòng "unofficial ... not affiliated with or endorsed by Anthropic", lộ trình trỏ 05–10 về bản tiếng Việt), và với mỗi module: `README.md`, `quiz.md`, `references.md` dịch từ chính bài tiếng Việt của repo (ngày kiểm và nguồn giữ nguyên, không thêm con số mới). README gốc có công tắc `**Tiếng Việt** · [English](en/README.md)`.
+>
+> - **Script:** bản tiếng Anh cùng tên file, cùng logic trong `en/modules/NN/python/` (lời nhắc, comment, chữ in ra bằng tiếng Anh). Module 03 có `tools_mau.py` tiếng Anh (`env_get_aqi`, `env_get_temperature`, cùng dữ liệu bịa). Module 04 dùng chung `rag_mau.py`, `solutions/` và sổ tay tiếng Việt `data/so_tay/` (bài dạy tìm kiếm tiếng Việt có dấu; README tiếng Anh có bảng dịch tiêu đề 7 trang, script in kèm nghĩa tiếng Anh của câu hỏi), nên số liệu "hạng 14 lên 4" vẫn đúng.
+> - **Bài tập:** bản tiếng Anh trong `en/modules/NN/exercises/` giữ nguyên tên hàm, lớp, tham số (cùng bộ test chấm). Chấm: `CHAM="$PWD/en/modules/NN-ten/exercises" uv run pytest modules/NN-ten -q` (`claude_vi.cham.nap` nhận đường dẫn tuyệt đối). Lời giải, test, dữ liệu dùng chung, không chép.
+> - **Test:** `tests/test_english_edition.py` so mỗi `en/modules/NN/` với `modules/NN/`: cùng file .md, cùng cấu trúc tiêu đề, cùng số câu quiz, cùng link ngoài, cùng số dòng bảng nguồn, cùng file ví dụ được link, bài tập cùng API, và chạy mọi script tiếng Anh ở mock mode.
+> - Trang Pages chưa có bản tiếng Anh (`build_site.py` chỉ đọc `modules/`).
+>
+> Còn lại: dịch module 05–10 theo khuôn `en/modules/01-messages-api/` (thêm link vào bảng của `en/README.md`, test tự kiểm); câu mock (`[MOCK] Xin chào! ...`) và thông báo `ModelRuleError` của `claude_vi` vẫn tiếng Việt; CI chưa chạy riêng `en/modules/*/python/*.py` (test pytest đã chạy chúng); trang Pages tiếng Anh.
+
 ## Việc có hạn
 
 - **Sau 30/11/2026:** Sonnet 4.5 retire. Đổi `status: retired` cho model này trong `config/models.yaml`.
