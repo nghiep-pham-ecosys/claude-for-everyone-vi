@@ -78,6 +78,13 @@ def test_english_modules_exist():
     assert EN_MODULES, "en/modules/ chưa có module nào"
 
 
+def test_modules_00_to_10_have_an_english_edition():
+    """Bản tiếng Anh đã phủ cả khoá 00–10 (issue #4); module mới có thể ra tiếng Việt trước."""
+    vi = sorted(p.name for p in (ROOT / "modules").iterdir() if p.is_dir() and p.name[:2] <= "10")
+    assert len(vi) == 11, vi
+    assert [m for m in vi if m not in EN_MODULES] == []
+
+
 def test_language_switch_both_ways():
     assert "[English](en/README.md)" in _read(ROOT / "README.md")
     assert "[Tiếng Việt](../README.md)" in _read(EN / "README.md")

@@ -10,7 +10,7 @@
 
 The course was first written in Vietnamese. This folder is the English edition. It mirrors the Vietnamese modules one to one: the same sections, the same examples, the same exercises and the same checked facts. The English text is also the script for the English videos, so the sentences are short and plain.
 
-Modules 00 to 04 are translated. Modules 05 to 10 are still Vietnamese only; they link to the Vietnamese pages below until their translation lands.
+All eleven modules, 00 to 10, are translated. The community modules (11 to 15) do not exist yet in either language.
 
 How the English edition is built:
 
@@ -32,7 +32,7 @@ Have a key? Copy `.env.example` to `.env`, fill in `ANTHROPIC_API_KEY`, and drop
 
 ## Learning path
 
-Legend: ✅ done · 🇻🇳 Vietnamese only for now · 🤝 open to community contributions.
+Legend: ✅ done · 🤝 open to community contributions.
 
 | Level | Module | English |
 |---|---|---|
@@ -41,12 +41,12 @@ Legend: ✅ done · 🇻🇳 Vietnamese only for now · 🤝 open to community c
 | Basic | [02 Prompt engineering](modules/02-prompt-engineering/README.md) | ✅ |
 | Intermediate | [03 Tool use](modules/03-tool-use/README.md) | ✅ |
 | Intermediate | [04 RAG](modules/04-rag/README.md) | ✅ |
-| Intermediate | [05 Structured outputs, PDF and Citations](../modules/05-structured-pdf-citations/README.md) | 🇻🇳 |
-| Intermediate | [06 Cost](../modules/06-cost/README.md) | 🇻🇳 |
-| Intermediate | [07 Thinking](../modules/07-thinking/README.md) | 🇻🇳 |
-| Advanced | [08 Agents & workflows](../modules/08-agents-workflows/README.md) | 🇻🇳 |
-| Advanced | [09 Agent SDK](../modules/09-agent-sdk/README.md) | 🇻🇳 |
-| Advanced | [10 MCP](../modules/10-mcp/README.md) | 🇻🇳 |
+| Intermediate | [05 Structured outputs, PDF and Citations](modules/05-structured-pdf-citations/README.md) | ✅ |
+| Intermediate | [06 Cost](modules/06-cost/README.md) | ✅ |
+| Intermediate | [07 Thinking](modules/07-thinking/README.md) | ✅ |
+| Advanced | [08 Agents & workflows](modules/08-agents-workflows/README.md) | ✅ |
+| Advanced | [09 Agent SDK](modules/09-agent-sdk/README.md) | ✅ |
+| Advanced | [10 MCP](modules/10-mcp/README.md) | ✅ |
 | Open to the community | 11 Claude Code · 12 Agent Skills · 13 Evals · 14 Production · 15 Research | 🤝 |
 
 Suggested order: 00 → 01 → 02 → 03 → 05 → 07 → 04 → 06 → 08 → 09 → 10. Why: module 04 is best after 05, module 06 needs 07, module 08 needs 03 and 07, module 09 needs 08, and module 10 needs 09 (see "Needs" at the top of each module).
@@ -63,7 +63,7 @@ The default model is `claude-haiku-5-5` with `MAX_TOKENS=1024`. Each module READ
 
 ## Contributing
 
-The repo is open to everyone, and you do not need an API key: everything runs in mock mode. Read [CONTRIBUTING.md](../CONTRIBUTING.md) (in Vietnamese). Translating modules 05 to 10 is a good first contribution: follow the layout of `en/modules/01-messages-api/`, and run `CLAUDE_MOCK=1 uv run pytest -q tests/test_english_edition.py` to check that your module mirrors the Vietnamese one.
+The repo is open to everyone, and you do not need an API key: everything runs in mock mode. Read [CONTRIBUTING.md](../CONTRIBUTING.md) (in Vietnamese). Fixing an unclear English sentence is a good first contribution. A new module can land in Vietnamese first. Its English edition follows the layout of `en/modules/01-messages-api/`; run `CLAUDE_MOCK=1 uv run pytest -q tests/test_english_edition.py` to check that your module mirrors the Vietnamese one.
 
 ## License
 
