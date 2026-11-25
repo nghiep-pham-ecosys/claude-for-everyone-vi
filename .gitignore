@@ -5,6 +5,7 @@ __pycache__/
 .ipynb_checkpoints/
 node_modules/
 site/
+_site/
 
 # file bàn giao tải về, không đưa vào repo
 *.zip

@@ -4,6 +4,12 @@
 >
 > Dự án cộng đồng, **không liên kết và không được Anthropic bảo trợ**. "Claude" và "Anthropic" là thương hiệu của Anthropic PBC.
 
+## Đọc trên web
+
+Trang khoá học: <https://nghiep-pham-ecosys.github.io/claude-for-everyone-vi/>. Mỗi module một trang, dựng từ README của module; video của module hiện trên trang đó khi đã đăng. Nguồn của trang: [`scripts/build_site.py`](scripts/build_site.py) và [`docs/pages/`](docs/pages) (video ghi ở [`docs/pages/videos.yaml`](docs/pages/videos.yaml)).
+
+Dựng thử trên máy: `uv run python scripts/build_site.py --out _site`, rồi mở `_site/index.html`.
+
 ## Bắt đầu trong 5 phút (không cần API key)
 
 ```bash
