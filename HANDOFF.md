@@ -102,6 +102,12 @@ PR #7, #8, #9 đã merge vào `main` ngày 09/11/2026.
 >
 > Còn lại: chưa kiểm docs SDK về dùng chung một client giữa nhiều luồng (script 04 dùng một client mỗi nhánh); context editing và server-side compaction chỉ giới thiệu, `claude_vi` chưa hỗ trợ; module 09 (Agent SDK) và capstone agent (sau module 10) chưa có.
 
+## Trang GitHub Pages và video
+
+> 🚧 **25/11/2026** (issue #5, nhánh `feat/5-pages-site`). `scripts/build_site.py` dựng trang mục lục và một trang cho mỗi module từ README (chỉ thư viện chuẩn + `pyyaml`); test ở `tests/test_build_site.py`. Video ghi ở `docs/pages/videos.yaml`: để trống thì trang báo "video đang được sản xuất", không có khung nhúng; chỉ nhận link YouTube. Workflow `.github/workflows/pages.yml` dựng và đăng khi `main` đổi.
+>
+> Còn lại: bật Pages (Settings → Pages → Source: GitHub Actions) trước lần merge đầu; mỗi video đăng xong thì điền link vào `videos.yaml`. Module mới phải thêm một mục vào `videos.yaml` (thiếu thì build báo lỗi).
+
 ## Việc có hạn
 
 - **Sau 30/11/2026:** Sonnet 4.5 retire. Đổi `status: retired` cho model này trong `config/models.yaml`.

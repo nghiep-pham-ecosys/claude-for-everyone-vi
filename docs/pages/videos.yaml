@@ -1,0 +1,33 @@
+# Video của từng module, dùng cho trang GitHub Pages (scripts/build_site.py).
+#
+# - Mỗi thư mục modules/NN-ten/ phải có đúng một mục ở đây. Thiếu hoặc thừa thì build báo lỗi.
+# - `video` để trống ("") tới khi video được đăng. Trang khi đó chỉ báo "video đang được sản xuất",
+#   không hiện khung nhúng hỏng.
+# - Khi đăng: dán link YouTube (https://www.youtube.com/watch?v=..., https://youtu.be/...).
+#   Build đổi thành link nhúng youtube-nocookie. Link không phải YouTube thì build báo lỗi.
+
+repo: nghiep-pham-ecosys/claude-for-everyone-vi
+
+modules:
+  00-setup:
+    video: ""
+  01-messages-api:
+    video: ""
+  02-prompt-engineering:
+    video: ""
+  03-tool-use:
+    video: ""
+  04-rag:
+    video: ""
+  05-structured-pdf-citations:
+    video: ""
+  06-cost:
+    video: ""
+  07-thinking:
+    video: ""
+  08-agents-workflows:
+    video: ""
+  09-agent-sdk:
+    video: ""
+  10-mcp:
+    video: ""
