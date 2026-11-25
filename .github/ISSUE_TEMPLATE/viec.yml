@@ -1,0 +1,43 @@
+name: Việc
+description: Một PR hoặc một việc 1-3 giờ, có điểm kết thúc kiểm được. Dùng cho việc đã rõ.
+title: "<type>: <mô tả ngắn>"
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Thiếu gì hoặc sai gì, và vì sao cần làm bây giờ.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: Điều kiện kiểm được. Mỗi điều ghi bằng chứng (test, link, run xanh).
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: input
+    id: estimate
+    attributes:
+      label: Estimate
+      description: Số giờ, ví dụ 1.5 h.
+      placeholder: 2 h
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - learn
+    validations:
+      required: true
+  - type: checkboxes
+    id: public-safe
+    attributes:
+      label: Public-safe
+      options:
+        - label: Issue này không chứa thông tin cá nhân, API key hay secret.
+          required: true

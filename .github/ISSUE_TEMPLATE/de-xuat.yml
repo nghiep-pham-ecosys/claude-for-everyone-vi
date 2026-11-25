@@ -1,0 +1,47 @@
+name: Đề xuất nội dung
+description: Bài mới, bài tập mới, giải thích rõ hơn, hoặc nhận làm một phần của module 11-15.
+title: "docs: <mô tả ngắn>"
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Việc lớn (module mới, đổi wrapper `claude_vi`) cần đề cương được duyệt trước khi viết code. Xem [CONTRIBUTING.md](https://github.com/nghiep-pham-ecosys/claude-for-everyone-vi/blob/main/CONTRIBUTING.md).
+        Ý tưởng còn mơ hồ: bàn ở [Discussions](https://github.com/nghiep-pham-ecosys/claude-for-everyone-vi/discussions) trước.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Thiếu gì hoặc chưa rõ chỗ nào, và vì sao người học cần.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Đề xuất
+      description: Bạn định thêm hoặc đổi gì. Ghi file sẽ chạm tới.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: Điều kiện kiểm được, mỗi dòng một điều (một test xanh, một file có mục X, một link mở được).
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Nguồn
+      description: Link docs chính thức sẽ dùng (platform.claude.com/docs, release notes). Dữ kiện phải kiểm từ nguồn hiện tại.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Đã kiểm
+      options:
+        - label: Nội dung tự viết, không chép tài liệu CC BY-NC hoặc không có giấy phép (xem NOTICE.md).
+          required: true
+        - label: Chạy được ở mock mode, không cần API key.
+          required: true
